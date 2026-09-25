@@ -20,6 +20,7 @@
 
 ```
 apps-script/         โค้ด Google Apps Script ทั้งหมด (backend .gs + frontend .html)
+assets/               ตราโรงเรียน (สกัดจากเทมเพลตสลิปเงินเดือนเดิม) — ฝังเป็น base64 ไว้ใน apps-script/JsApi.html แล้ว
 docs/
   DATA_ANALYSIS.md    วิเคราะห์โครงสร้างไฟล์งานเดิมที่ใช้ออกแบบระบบ
   SHEET_SCHEMA.md      โครงสร้างฐานข้อมูล Google Sheet ทั้ง 6 ชีต

@@ -16,7 +16,7 @@ var SHEET_HEADERS = {
   Employees: ['EmployeeID', 'PrefixName', 'FirstName', 'LastName', 'Group', 'Position', 'StartDate', 'Status', 'HasSSO', 'BankName', 'BankAccountNo', 'CitizenID', 'Phone', 'Role', 'PinHash', 'PinSalt', 'Note', 'CreatedAt'],
   SalaryHistory: ['HistoryID', 'EmployeeID', 'EffectiveMonth', 'BaseSalary', 'ChangeType', 'ApprovedDate', 'ApprovedBy', 'Note', 'CreatedAt'],
   BackPayQueue: ['QueueID', 'EmployeeID', 'FromMonth', 'ToMonth', 'OldBaseSalary', 'NewBaseSalary', 'MonthlyDiff', 'MonthsCount', 'TotalBackPay', 'Status', 'AppliedRunMonth', 'CreatedAt', 'Note'],
-  PayrollRuns: ['Month', 'EmployeeID', 'BaseSalary', 'Allowance', 'AllowanceNote', 'BackPay', 'BackPayNote', 'GrossPay', 'SSOEmployee', 'SSOEmployer', 'CompFundEmployer', 'OtherDeductionTotal', 'TotalDeduction', 'NetPay', 'Status', 'PaidDate', 'UpdatedAt', 'UpdatedBy'],
+  PayrollRuns: ['Month', 'EmployeeID', 'BaseSalary', 'PositionAllowance', 'OnDutyPay', 'OtherIncome', 'OtherIncomeNote', 'BackPay', 'BackPayNote', 'GrossPay', 'SSOEmployee', 'SSOEmployer', 'CompFundEmployer', 'OtherDeductionTotal', 'TotalDeduction', 'NetPay', 'Status', 'PaidDate', 'UpdatedAt', 'UpdatedBy'],
   PayrollDeductions: ['DeductionID', 'Month', 'EmployeeID', 'Category', 'Label', 'Amount'],
   Settings: ['Key', 'Value']
 };
@@ -27,7 +27,7 @@ var DEFAULT_SETTINGS = {
   SchoolDistrictOffice: 'สำนักงานเขตพื้นที่การศึกษามัธยมศึกษาพะเยา',
   SSORate: '0.05',
   SSOWageCap: '15000',
-  CompFundRate: '0.002',
+  CompFundRate: '0',
   FinanceOfficerName: '',
   FinanceOfficerTitle: 'เจ้าหน้าที่การเงิน',
   BudgetHeadName: '',

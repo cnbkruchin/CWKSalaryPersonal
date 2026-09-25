@@ -7,7 +7,7 @@
 
 | คอลัมน์ | ชนิด | คำอธิบาย |
 |---|---|---|
-| EmployeeID | string | รหัสพนักงาน ไม่ซ้ำ (เช่น E001) ใช้ล็อกอิน |
+| EmployeeID | string | รหัสพนักงาน ไม่ซ้ำ ใช้ล็อกอิน — โรงเรียนใช้รูปแบบเดิม `Cwk001`, `Cwk002`, ... (Cwk = จุนวิทยาคม) ควรตั้งต่อจากเลขที่ใช้อยู่เดิมเพื่อความต่อเนื่อง |
 | PrefixName | string | คำนำหน้าชื่อ |
 | FirstName | string | ชื่อ |
 | LastName | string | นามสกุล |
@@ -65,14 +65,16 @@
 | Month | เดือนของรอบจ่าย `YYYY-MM` |
 | EmployeeID | อ้างอิงพนักงาน |
 | BaseSalary | เงินเดือนที่ใช้ในรอบนี้ (ดึงจาก SalaryHistory ล่าสุด ณ เดือนนั้น) |
-| Allowance | เงินเพิ่มพิเศษ |
-| AllowanceNote | หมายเหตุเงินเพิ่มพิเศษ |
+| PositionAllowance | เงินประจำตำแหน่ง (ค่าตำแหน่ง) — มักคงที่ทุกเดือน ระบบดึงค่าจากเดือนก่อนหน้ามาเป็นค่าตั้งต้นให้อัตโนมัติ |
+| OnDutyPay | ค่าขึ้นเวร (แปรผันตามจำนวนเวรจริงแต่ละเดือน) |
+| OtherIncome | รับอื่นๆ (รายรับพิเศษอื่นที่ไม่เข้าเงื่อนไขข้างต้น เช่น ค่าขึ้นเวรแทน, คืนเงินประกัน) |
+| OtherIncomeNote | หมายเหตุรับอื่นๆ |
 | BackPay | ยอดตกเบิกที่รวมในรอบนี้ |
 | BackPayNote | หมายเหตุตกเบิก (เช่น "ตกเบิก เม.ย.–ส.ค. 69") |
-| GrossPay | รวมรับ = BaseSalary+Allowance+BackPay |
+| GrossPay | รวมรับ = BaseSalary+PositionAllowance+OnDutyPay+OtherIncome+BackPay |
 | SSOEmployee | หักสมทบ ปกส. ฝั่งลูกจ้าง |
 | SSOEmployer | สมทบ ปกส. ฝั่งโรงเรียน |
-| CompFundEmployer | สมทบกองทุนเงินทดแทนฝั่งโรงเรียน |
+| CompFundEmployer | สมทบกองทุนเงินทดแทน — กฎหมายกำหนดให้นายจ้างจ่ายฝ่ายเดียว ไม่หักจากลูกจ้าง แสดงบนสลิปเพื่อความโปร่งใสเท่านั้น (ไม่รวมใน TotalDeduction) |
 | OtherDeductionTotal | รวมยอดหักอื่น ๆ (มาจากชีต PayrollDeductions) |
 | TotalDeduction | รวมหักทั้งหมด |
 | NetPay | คงเหลือสุทธิที่โอนเข้าบัญชี |
@@ -100,7 +102,7 @@
 | SchoolDistrictOffice | สำนักงานเขตพื้นที่การศึกษามัธยมศึกษาพะเยา |
 | SSORate | 0.05 |
 | SSOWageCap | 15000 |
-| CompFundRate | 0.002 |
+| CompFundRate | 0 (นายจ้างจ่ายฝ่ายเดียวตามกฎหมาย ปกติตั้งเป็น 0 ไม่ให้กระทบยอดสุทธิลูกจ้าง) |
 | FinanceOfficerName / Title | ชื่อ-ตำแหน่ง เจ้าหน้าที่การเงิน (ผู้จัดทำ) |
 | BudgetHeadName / Title | หัวหน้างานกลุ่มบริหารงบประมาณ |
 | DeputyDirectorName / Title | รองผู้อำนวยการ |

@@ -60,21 +60,27 @@
     border: 1px solid #d7deec; border-radius: 6px; padding: 8mm 10mm; box-sizing: border-box;
     display: flex; flex-direction: column;
   }
-  .payslip-header { text-align: center; border-bottom: 2px solid #264ed6; padding-bottom: 6px; margin-bottom: 8px; }
-  .payslip-header .school { font-size: 1.15rem; font-weight: 700; color: #1a2f6e; }
-  .payslip-header .title { font-size: .95rem; color: #445; margin-top: 2px; }
-  .payslip-meta { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 8px; }
-  .payslip-meta .name { font-weight: 700; font-size: 1rem; }
-  .payslip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+  .payslip-header { display: flex; align-items: center; gap: 12px; border-bottom: 2px solid #264ed6; padding-bottom: 6px; margin-bottom: 8px; }
+  .payslip-header img { height: 44px; width: auto; flex-shrink: 0; }
+  .payslip-header .school { font-size: 1.1rem; font-weight: 700; color: #1a2f6e; }
+  .payslip-header .title { font-size: .82rem; color: #445; margin-top: 1px; }
+  .payslip-info { font-size: .85rem; margin-bottom: 8px; line-height: 1.6; }
+  .payslip-info .name { font-weight: 700; font-size: 1rem; }
+  .payslip-info .row { display: flex; justify-content: space-between; gap: 12px; }
+  .payslip-info b { font-weight: 600; color: #334; }
+  .payslip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .payslip-box h4 { font-size: .82rem; font-weight: 700; background: #eef1f8; padding: .3rem .6rem; border-radius: 6px 6px 0 0; }
   .payslip-box table { width: 100%; border-collapse: collapse; border: 1px solid #e7ebf3; border-top: none; }
   .payslip-box td { padding: .3rem .6rem; font-size: .85rem; border-bottom: 1px dashed #eceff6; }
   .payslip-box td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+  .payslip-box td.unit { color: #99a; font-size: .75rem; width: 2.2rem; }
   .payslip-box tr.sum td { font-weight: 700; border-top: 1px solid #cfd6e6; border-bottom: none; }
-  .payslip-net { margin-top: 10px; text-align: center; background: #f3f7ff; border: 1px dashed #8cb1ff; border-radius: 8px; padding: 8px; }
-  .payslip-net .amount { font-size: 1.5rem; font-weight: 700; color: #1a2f6e; }
+  .payslip-net { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #f3f7ff; border: 1px dashed #8cb1ff; border-radius: 8px; padding: 8px 14px; }
+  .payslip-net .label { font-weight: 700; color: #334; }
+  .payslip-net .amount { font-size: 1.4rem; font-weight: 700; color: #1a2f6e; }
   .payslip-net .text { font-size: .8rem; color: #556; }
-  .payslip-footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: .8rem; color: #556; }
+  .payslip-note { font-size: .78rem; color: #667; margin-top: 8px; }
+  .payslip-footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 14px; font-size: .82rem; color: #445; text-align: center; }
 
   @media print {
     body * { visibility: hidden; }

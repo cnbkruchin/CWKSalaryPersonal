@@ -43,10 +43,12 @@ function getApprovalMemo(token, month) {
     var deductions = findAll_(SHEET_NAMES.PAYROLL_DEDUCTIONS, 'Month', month);
     var settings = getSettings_();
 
-    var totalBaseSalary = 0, totalAllowance = 0, totalBackPay = 0, totalSSOEmployee = 0, totalSSOEmployer = 0, totalCompFundEmployer = 0;
+    var totalBaseSalary = 0, totalPositionAllowance = 0, totalOnDutyPay = 0, totalOtherIncome = 0, totalBackPay = 0, totalSSOEmployee = 0, totalSSOEmployer = 0, totalCompFundEmployer = 0;
     rows.forEach(function (r) {
       totalBaseSalary += Number(r.BaseSalary);
-      totalAllowance += Number(r.Allowance);
+      totalPositionAllowance += Number(r.PositionAllowance);
+      totalOnDutyPay += Number(r.OnDutyPay);
+      totalOtherIncome += Number(r.OtherIncome);
       totalBackPay += Number(r.BackPay);
       totalSSOEmployee += Number(r.SSOEmployee);
       totalSSOEmployer += Number(r.SSOEmployer);
@@ -99,9 +101,11 @@ function getApprovalMemo(token, month) {
       grandTotalText: bahtText(grandTotal),
       breakdown: {
         totalBaseSalary: round2(totalBaseSalary),
-        totalAllowance: round2(totalAllowance),
+        totalPositionAllowance: round2(totalPositionAllowance),
+        totalOnDutyPay: round2(totalOnDutyPay),
+        totalOtherIncome: round2(totalOtherIncome),
         totalBackPay: round2(totalBackPay),
-        totalGrossIncome: round2(totalBaseSalary + totalAllowance + totalBackPay),
+        totalGrossIncome: round2(totalBaseSalary + totalPositionAllowance + totalOnDutyPay + totalOtherIncome + totalBackPay),
         totalSSOEmployee: round2(totalSSOEmployee),
         totalSSOEmployer: round2(totalSSOEmployer),
         totalCompFundEmployer: round2(totalCompFundEmployer),
@@ -127,6 +131,8 @@ function buildPayslip_(month, run, emp, deductions) {
     monthLabel: formatThaiMonthLong(month),
     schoolName: settings.SchoolName,
     schoolAddress: settings.SchoolAddress,
+    financeOfficerName: settings.FinanceOfficerName,
+    financeOfficerTitle: settings.FinanceOfficerTitle,
     employeeId: emp.EmployeeID,
     fullName: (emp.PrefixName || '') + (emp.FirstName || '') + ' ' + (emp.LastName || ''),
     group: emp.Group || '',
@@ -134,12 +140,15 @@ function buildPayslip_(month, run, emp, deductions) {
     bankName: emp.BankName || '',
     bankAccountNo: emp.BankAccountNo || '',
     baseSalary: Number(run.BaseSalary),
-    allowance: Number(run.Allowance),
-    allowanceNote: run.AllowanceNote || '',
+    positionAllowance: Number(run.PositionAllowance),
+    onDutyPay: Number(run.OnDutyPay),
+    otherIncome: Number(run.OtherIncome),
+    otherIncomeNote: run.OtherIncomeNote || '',
     backPay: Number(run.BackPay),
     backPayNote: run.BackPayNote || '',
     grossPay: Number(run.GrossPay),
     ssoEmployee: Number(run.SSOEmployee),
+    compFundEmployer: Number(run.CompFundEmployer),
     otherDeductions: deductions.map(function (d) { return { label: (DEDUCTION_CATEGORY_LABEL[d.Category] || d.Category) + (d.Label ? (' - ' + d.Label) : ''), amount: Number(d.Amount) }; }),
     totalDeduction: Number(run.TotalDeduction),
     netPay: Number(run.NetPay),

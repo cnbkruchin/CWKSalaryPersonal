@@ -15,13 +15,21 @@ function computeCompFund_(baseSalary) {
 }
 
 function recalcLineTotals_(line) {
-  var gross = round2(Number(line.BaseSalary) + Number(line.Allowance) + Number(line.BackPay));
+  var gross = round2(Number(line.BaseSalary) + Number(line.PositionAllowance) + Number(line.OnDutyPay) + Number(line.OtherIncome) + Number(line.BackPay));
   var totalDeduction = round2(Number(line.SSOEmployee) + Number(line.OtherDeductionTotal));
   var net = round2(gross - totalDeduction);
   line.GrossPay = gross;
   line.TotalDeduction = totalDeduction;
   line.NetPay = net;
   return line;
+}
+
+/** อัตราเงินประจำตำแหน่ง/ค่าขึ้นเวรมักคงที่ทุกเดือน — ดึงค่าจากรอบจ่ายเดือนล่าสุดของพนักงานคนนี้มาเป็นค่าตั้งต้น */
+function carryForwardIncome_(employeeId, beforeMonth) {
+  var prior = findAll_(SHEET_NAMES.PAYROLL_RUNS, 'EmployeeID', employeeId)
+    .filter(function (r) { return compareMonthKey(r.Month, beforeMonth) < 0; })
+    .sort(function (a, b) { return compareMonthKey(b.Month, a.Month); })[0];
+  return prior ? { positionAllowance: Number(prior.PositionAllowance) || 0 } : { positionAllowance: 0 };
 }
 
 function sumDeductionsFor_(month, employeeId) {
@@ -43,9 +51,11 @@ function getOrCreatePayrollRun(token, month) {
         var baseSalary = currentBaseSalaryOf_(emp.EmployeeID, month);
         var hasSSO = emp.HasSSO === true || emp.HasSSO === 'TRUE';
         var sso = computeSSO_(baseSalary, hasSSO);
+        var carried = carryForwardIncome_(emp.EmployeeID, month);
         var line = {
           Month: month, EmployeeID: emp.EmployeeID, BaseSalary: baseSalary,
-          Allowance: 0, AllowanceNote: '', BackPay: 0, BackPayNote: '',
+          PositionAllowance: carried.positionAllowance, OnDutyPay: 0, OtherIncome: 0, OtherIncomeNote: '',
+          BackPay: 0, BackPayNote: '',
           SSOEmployee: sso, SSOEmployer: sso, CompFundEmployer: computeCompFund_(baseSalary),
           OtherDeductionTotal: 0, Status: 'draft', PaidDate: '', UpdatedAt: nowIso(), UpdatedBy: ''
         };
@@ -88,8 +98,10 @@ function buildPayrollRunView_(month, rows) {
       bankAccountNo: emp.BankAccountNo || '',
       bankName: emp.BankName || '',
       baseSalary: Number(r.BaseSalary),
-      allowance: Number(r.Allowance),
-      allowanceNote: r.AllowanceNote,
+      positionAllowance: Number(r.PositionAllowance),
+      onDutyPay: Number(r.OnDutyPay),
+      otherIncome: Number(r.OtherIncome),
+      otherIncomeNote: r.OtherIncomeNote,
       backPay: Number(r.BackPay),
       backPayNote: r.BackPayNote,
       grossPay: Number(r.GrossPay),
@@ -110,12 +122,13 @@ function buildPayrollRunView_(month, rows) {
   lines.sort(function (a, b) { return a.fullName.localeCompare(b.fullName, 'th'); });
 
   var totals = lines.reduce(function (acc, l) {
-    acc.baseSalary += l.baseSalary; acc.allowance += l.allowance; acc.backPay += l.backPay;
+    acc.baseSalary += l.baseSalary; acc.positionAllowance += l.positionAllowance; acc.onDutyPay += l.onDutyPay;
+    acc.otherIncome += l.otherIncome; acc.backPay += l.backPay;
     acc.grossPay += l.grossPay; acc.ssoEmployee += l.ssoEmployee; acc.ssoEmployer += l.ssoEmployer;
     acc.compFundEmployer += l.compFundEmployer; acc.otherDeductionTotal += l.otherDeductionTotal;
     acc.totalDeduction += l.totalDeduction; acc.netPay += l.netPay;
     return acc;
-  }, { baseSalary: 0, allowance: 0, backPay: 0, grossPay: 0, ssoEmployee: 0, ssoEmployer: 0, compFundEmployer: 0, otherDeductionTotal: 0, totalDeduction: 0, netPay: 0 });
+  }, { baseSalary: 0, positionAllowance: 0, onDutyPay: 0, otherIncome: 0, backPay: 0, grossPay: 0, ssoEmployee: 0, ssoEmployer: 0, compFundEmployer: 0, otherDeductionTotal: 0, totalDeduction: 0, netPay: 0 });
   Object.keys(totals).forEach(function (k) { totals[k] = round2(totals[k]); });
 
   return {
@@ -138,8 +151,10 @@ function updatePayrollLine(token, month, employeeId, patch) {
 
     var next = {
       BaseSalary: patch.baseSalary !== undefined ? Number(patch.baseSalary) : Number(run.BaseSalary),
-      Allowance: patch.allowance !== undefined ? Number(patch.allowance) : Number(run.Allowance),
-      AllowanceNote: patch.allowanceNote !== undefined ? patch.allowanceNote : run.AllowanceNote,
+      PositionAllowance: patch.positionAllowance !== undefined ? Number(patch.positionAllowance) : Number(run.PositionAllowance),
+      OnDutyPay: patch.onDutyPay !== undefined ? Number(patch.onDutyPay) : Number(run.OnDutyPay),
+      OtherIncome: patch.otherIncome !== undefined ? Number(patch.otherIncome) : Number(run.OtherIncome),
+      OtherIncomeNote: patch.otherIncomeNote !== undefined ? patch.otherIncomeNote : run.OtherIncomeNote,
       BackPay: patch.backPay !== undefined ? Number(patch.backPay) : Number(run.BackPay),
       BackPayNote: patch.backPayNote !== undefined ? patch.backPayNote : run.BackPayNote,
       SSOEmployee: patch.ssoEmployee !== undefined ? Number(patch.ssoEmployee) : Number(run.SSOEmployee),
@@ -174,7 +189,8 @@ function applyPendingBackPay(token, month, employeeId) {
       OtherDeductionTotal: sumDeductionsFor_(month, employeeId)
     };
     Object.assign(next, {
-      BaseSalary: Number(run.BaseSalary), Allowance: Number(run.Allowance),
+      BaseSalary: Number(run.BaseSalary), PositionAllowance: Number(run.PositionAllowance),
+      OnDutyPay: Number(run.OnDutyPay), OtherIncome: Number(run.OtherIncome),
       SSOEmployee: Number(run.SSOEmployee)
     });
     recalcLineTotals_(next);
@@ -202,7 +218,8 @@ function addPayrollDeduction(token, month, employeeId, category, label, amount) 
 
     var next = {
       OtherDeductionTotal: sumDeductionsFor_(month, employeeId),
-      BaseSalary: Number(run.BaseSalary), Allowance: Number(run.Allowance), BackPay: Number(run.BackPay),
+      BaseSalary: Number(run.BaseSalary), PositionAllowance: Number(run.PositionAllowance),
+      OnDutyPay: Number(run.OnDutyPay), OtherIncome: Number(run.OtherIncome), BackPay: Number(run.BackPay),
       SSOEmployee: Number(run.SSOEmployee)
     };
     recalcLineTotals_(next);
@@ -226,7 +243,8 @@ function removePayrollDeduction(token, month, employeeId, deductionId) {
 
     var next = {
       OtherDeductionTotal: sumDeductionsFor_(month, employeeId),
-      BaseSalary: Number(run.BaseSalary), Allowance: Number(run.Allowance), BackPay: Number(run.BackPay),
+      BaseSalary: Number(run.BaseSalary), PositionAllowance: Number(run.PositionAllowance),
+      OnDutyPay: Number(run.OnDutyPay), OtherIncome: Number(run.OtherIncome), BackPay: Number(run.BackPay),
       SSOEmployee: Number(run.SSOEmployee)
     };
     recalcLineTotals_(next);

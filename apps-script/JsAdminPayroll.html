@@ -53,13 +53,13 @@
         '</div>' +
         '<div class="card overflow-x-auto">' +
           '<table class="table-clean w-full">' +
-            '<thead><tr><th>ลูกจ้าง</th><th class="text-right">เงินเดือน</th><th class="text-right">เพิ่มพิเศษ</th><th class="text-right">ตกเบิก</th>' +
+            '<thead><tr><th>ลูกจ้าง</th><th class="text-right">เงินเดือน</th><th class="text-right">รายรับเพิ่มเติม</th><th class="text-right">ตกเบิก</th>' +
             '<th class="text-right">รวมรับ</th><th class="text-right">ปกส.</th><th class="text-right">หักอื่นๆ</th><th class="text-right">รวมหัก</th><th class="text-right">สุทธิ</th><th></th></tr></thead>' +
             '<tbody>' + run.lines.map(rowHtml).join('') + '</tbody>' +
             '<tfoot><tr class="font-bold">' +
               '<td>รวม (' + run.lines.length + ' คน)</td>' +
               '<td class="text-right">' + App.money(run.totals.baseSalary) + '</td>' +
-              '<td class="text-right">' + App.money(run.totals.allowance) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.positionAllowance + run.totals.onDutyPay + run.totals.otherIncome) + '</td>' +
               '<td class="text-right">' + App.money(run.totals.backPay) + '</td>' +
               '<td class="text-right">' + App.money(run.totals.grossPay) + '</td>' +
               '<td class="text-right">' + App.money(run.totals.ssoEmployee) + '</td>' +
@@ -104,10 +104,11 @@
     function rowHtml(l) {
       var pendingBadge = (l.pendingBackPay && l.pendingBackPay.count > 0)
         ? '<div class="text-xs text-amber-600 mt-0.5">ค้างตกเบิก ' + App.money(l.pendingBackPay.total) + ' บาท</div>' : '';
+      var extraIncome = l.positionAllowance + l.onDutyPay + l.otherIncome;
       return '<tr>' +
         '<td>' + App.esc(l.fullName) + pendingBadge + '</td>' +
         '<td class="text-right">' + App.money(l.baseSalary) + '</td>' +
-        '<td class="text-right">' + App.money(l.allowance) + '</td>' +
+        '<td class="text-right">' + App.money(extraIncome) + '</td>' +
         '<td class="text-right">' + App.money(l.backPay) + '</td>' +
         '<td class="text-right font-medium">' + App.money(l.grossPay) + '</td>' +
         '<td class="text-right">' + App.money(l.ssoEmployee) + '</td>' +
@@ -139,8 +140,10 @@
         '<h3 class="text-lg font-bold mb-1">' + App.esc(line.fullName) + '</h3>' +
         '<p class="text-sm text-gray-500 mb-4">แก้ไขรายการเดือน ' + App.esc(currentRun.monthLabel) + '</p>' +
         '<form id="line-form" class="grid grid-cols-2 gap-3">' +
-          '<div><label class="label">เงินเพิ่มพิเศษ</label><input id="e-allow" type="number" step="0.01" class="input" value="' + line.allowance + '"></div>' +
-          '<div><label class="label">หมายเหตุเพิ่มพิเศษ</label><input id="e-allow-note" class="input" value="' + App.esc(line.allowanceNote) + '"></div>' +
+          '<div><label class="label">เงินประจำตำแหน่ง</label><input id="e-position" type="number" step="0.01" class="input" value="' + line.positionAllowance + '"></div>' +
+          '<div><label class="label">ค่าขึ้นเวร</label><input id="e-onduty" type="number" step="0.01" class="input" value="' + line.onDutyPay + '"></div>' +
+          '<div><label class="label">รับอื่นๆ</label><input id="e-otherincome" type="number" step="0.01" class="input" value="' + line.otherIncome + '"></div>' +
+          '<div><label class="label">หมายเหตุรับอื่นๆ</label><input id="e-otherincome-note" class="input" value="' + App.esc(line.otherIncomeNote) + '"></div>' +
           '<div><label class="label">ตกเบิก (กรอกเอง)</label><input id="e-backpay" type="number" step="0.01" class="input" value="' + line.backPay + '"></div>' +
           '<div><label class="label">หมายเหตุตกเบิก</label><input id="e-backpay-note" class="input" value="' + App.esc(line.backPayNote) + '"></div>' +
           '<div><label class="label">ประกันสังคม (ปรับเองได้)</label><input id="e-sso" type="number" step="0.01" class="input" value="' + line.ssoEmployee + '"></div>' +
@@ -196,8 +199,10 @@
 
       function saveLine() {
         App.call('updatePayrollLine', month, line.employeeId, {
-          allowance: document.getElementById('e-allow').value,
-          allowanceNote: document.getElementById('e-allow-note').value,
+          positionAllowance: document.getElementById('e-position').value,
+          onDutyPay: document.getElementById('e-onduty').value,
+          otherIncome: document.getElementById('e-otherincome').value,
+          otherIncomeNote: document.getElementById('e-otherincome-note').value,
           backPay: document.getElementById('e-backpay').value,
           backPayNote: document.getElementById('e-backpay-note').value,
           ssoEmployee: document.getElementById('e-sso').value

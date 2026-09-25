@@ -4,45 +4,54 @@
     document.getElementById('page-size-style').textContent = css;
   };
 
-  /** สร้าง HTML ของสลิปเงินเดือน 1 ใบ (A5 แนวนอน) ใช้ร่วมกันทั้งฝั่งแอดมิน (พิมพ์รวม) และพนักงาน (ดูของตัวเอง) */
+  /**
+   * สร้าง HTML ของสลิปเงินเดือน 1 ใบ (A5 แนวนอน) ใช้ร่วมกันทั้งฝั่งแอดมิน (พิมพ์รวม) และพนักงาน (ดูของตัวเอง)
+   * จัดหมวดหมู่รายการตามแบบฟอร์มสลิปเดิมของโรงเรียน (เงินเดือน/เงินประจำตำแหน่ง/ค่าขึ้นเวร/รับอื่นๆ ฯลฯ)
+   */
   App.renderPayslip = function (s) {
-    var otherRows = (s.otherDeductions || []).map(function (d) {
-      return '<tr><td>' + App.esc(d.label) + '</td><td class="amt">' + App.money(d.amount) + '</td></tr>';
-    }).join('');
+    var row = function (label, amount) {
+      return '<tr><td>' + App.esc(label) + '</td><td class="amt">' + App.money(amount) + '</td><td class="unit">บาท</td></tr>';
+    };
+    var otherRows = (s.otherDeductions || []).map(function (d) { return row(d.label, d.amount); }).join('');
+    var notes = [s.otherIncomeNote, s.backPayNote].filter(function (n) { return n; });
 
     return (
       '<div class="payslip">' +
         '<div class="payslip-header">' +
-          '<div class="school">' + App.esc(s.schoolName) + '</div>' +
-          '<div class="title">สลิปเงินเดือนลูกจ้างชั่วคราว &middot; ประจำเดือน' + App.esc(s.monthLabel) + '</div>' +
+          '<img src="' + App.SCHOOL_LOGO + '" alt="ตราโรงเรียน">' +
+          '<div><div class="school">' + App.esc(s.schoolName) + '</div>' +
+          '<div class="title">' + App.esc(s.schoolAddress || '') + '</div></div>' +
         '</div>' +
-        '<div class="payslip-meta">' +
-          '<div><div class="name">' + App.esc(s.fullName) + '</div>' +
-              '<div>' + App.esc(s.group || '') + (s.position ? (' &middot; ' + App.esc(s.position)) : '') + '</div></div>' +
-          '<div class="text-right"><div>รหัสพนักงาน: ' + App.esc(s.employeeId) + '</div>' +
-              '<div>' + App.esc(s.bankName || '') + (s.bankAccountNo ? (' เลขที่ ' + App.esc(s.bankAccountNo)) : '') + '</div></div>' +
+        '<div class="payslip-info">' +
+          '<div>ประจำเดือน <b>' + App.esc(s.monthLabel) + '</b></div>' +
+          '<div class="name">ชื่อ-นามสกุล : ' + App.esc(s.fullName) + '</div>' +
+          '<div class="row"><span>ตำแหน่ง : ' + App.esc(s.position || s.group || '-') + '</span>' +
+          '<span>เลขที่บัญชี : ' + App.esc(s.bankAccountNo || '-') + '</span></div>' +
         '</div>' +
         '<div class="payslip-grid">' +
           '<div class="payslip-box"><h4>รายรับ</h4><table>' +
-            '<tr><td>เงินเดือน</td><td class="amt">' + App.money(s.baseSalary) + '</td></tr>' +
-            (s.allowance ? '<tr><td>เงินเพิ่มพิเศษ' + (s.allowanceNote ? ' (' + App.esc(s.allowanceNote) + ')' : '') + '</td><td class="amt">' + App.money(s.allowance) + '</td></tr>' : '') +
-            (s.backPay ? '<tr><td>เงินตกเบิก' + (s.backPayNote ? ' (' + App.esc(s.backPayNote) + ')' : '') + '</td><td class="amt">' + App.money(s.backPay) + '</td></tr>' : '') +
-            '<tr class="sum"><td>รวมรับ</td><td class="amt">' + App.money(s.grossPay) + '</td></tr>' +
+            row('เงินเดือน', s.baseSalary) +
+            row('เงินประจำตำแหน่ง', s.positionAllowance) +
+            row('ค่าขึ้นเวร', s.onDutyPay) +
+            row('รับอื่นๆ' + (s.otherIncomeNote ? ' (' + App.esc(s.otherIncomeNote) + ')' : ''), s.otherIncome) +
+            (s.backPay ? row('เงินตกเบิก' + (s.backPayNote ? ' (' + App.esc(s.backPayNote) + ')' : ''), s.backPay) : '') +
+            '<tr class="sum">' + '<td>รวมรับ</td><td class="amt">' + App.money(s.grossPay) + '</td><td class="unit">บาท</td></tr>' +
           '</table></div>' +
           '<div class="payslip-box"><h4>รายจ่าย</h4><table>' +
-            (s.ssoEmployee ? '<tr><td>ประกันสังคม 5%</td><td class="amt">' + App.money(s.ssoEmployee) + '</td></tr>' : '') +
+            row('ประกันสังคม', s.ssoEmployee) +
             otherRows +
-            (!s.ssoEmployee && !otherRows ? '<tr><td class="text-gray-400">— ไม่มีรายการหัก —</td><td></td></tr>' : '') +
-            '<tr class="sum"><td>รวมหัก</td><td class="amt">' + App.money(s.totalDeduction) + '</td></tr>' +
+            row('กองทุนทดแทน', s.compFundEmployer) +
+            '<tr class="sum"><td>รวมหัก</td><td class="amt">' + App.money(s.totalDeduction) + '</td><td class="unit">บาท</td></tr>' +
           '</table></div>' +
         '</div>' +
         '<div class="payslip-net">' +
-          '<div class="amount">' + App.money(s.netPay) + ' บาท</div>' +
+          '<div><span class="label">คงเหลือสุทธิ</span> <span class="amount">' + App.money(s.netPay) + '</span> บาท</div>' +
           '<div class="text">(' + App.esc(s.netPayText) + ')</div>' +
         '</div>' +
+        (notes.length ? '<div class="payslip-note">*หมายเหตุ ' + notes.map(App.esc).join(' &middot; ') + '</div>' : '') +
         '<div class="payslip-footer">' +
-          '<div>ลงชื่อผู้รับเงิน .................................................</div>' +
-          '<div>พิมพ์จากระบบเมื่อ ' + new Date().toLocaleDateString('th-TH') + '</div>' +
+          '<div>ลงชื่อ.................................................เจ้าหน้าที่การเงิน<br>' +
+          '(' + App.esc(s.financeOfficerName || '.............................') + ')</div>' +
         '</div>' +
       '</div>'
     );
