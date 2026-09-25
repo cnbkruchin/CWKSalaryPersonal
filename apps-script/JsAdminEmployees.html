@@ -1,0 +1,152 @@
+<script>
+  App.views.adminEmployees = function (root) {
+    root.innerHTML = App.adminShell('employees', '<div id="employees-body" class="p-6"><p class="text-gray-400">กำลังโหลด...</p></div>');
+    loadEmployees();
+
+    function loadEmployees(includeInactive) {
+      App.call('listEmployees', !!includeInactive).then(function (rows) {
+        renderTable(rows, !!includeInactive);
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function renderTable(rows, includeInactive) {
+      var body = document.getElementById('employees-body');
+      body.innerHTML =
+        '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
+          '<h1 class="text-xl font-bold">ทะเบียนลูกจ้าง (' + rows.length + ' คน)</h1>' +
+          '<div class="flex items-center gap-3">' +
+            '<label class="text-sm text-gray-500 flex items-center gap-1.5"><input type="checkbox" id="chk-inactive" ' + (includeInactive ? 'checked' : '') + '> แสดงที่ปิดใช้งาน</label>' +
+            '<button id="btn-add-emp" class="btn btn-primary">+ เพิ่มลูกจ้าง</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card overflow-x-auto"><table class="table-clean w-full">' +
+          '<thead><tr><th>รหัส</th><th>ชื่อ-สกุล</th><th>กลุ่มงาน</th><th>บัญชีธนาคาร</th><th>ปกส.</th><th>สถานะ</th><th></th></tr></thead>' +
+          '<tbody>' + rows.map(rowHtml).join('') + '</tbody>' +
+        '</table></div>';
+
+      document.getElementById('chk-inactive').onchange = function (e) { loadEmployees(e.target.checked); };
+      document.getElementById('btn-add-emp').onclick = openAddModal;
+      rows.forEach(function (r) {
+        var editBtn = document.getElementById('edit-' + cssId(r.employeeId));
+        if (editBtn) editBtn.onclick = function () { openEditModal(r); };
+        var toggleBtn = document.getElementById('toggle-' + cssId(r.employeeId));
+        if (toggleBtn) toggleBtn.onclick = function () { toggleStatus(r); };
+        var resetBtn = document.getElementById('reset-' + cssId(r.employeeId));
+        if (resetBtn) resetBtn.onclick = function () { resetPin(r); };
+      });
+    }
+
+    function cssId(id) { return String(id).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+    function rowHtml(r) {
+      var id = cssId(r.employeeId);
+      return '<tr>' +
+        '<td class="font-mono text-xs">' + App.esc(r.employeeId) + '</td>' +
+        '<td>' + App.esc((r.prefixName || '') + r.firstName + ' ' + r.lastName) + '</td>' +
+        '<td>' + App.esc(r.group || '-') + '</td>' +
+        '<td class="font-mono text-xs">' + App.esc(r.bankName || '') + ' ' + App.esc(r.bankAccountNo || '') + '</td>' +
+        '<td>' + (r.hasSSO ? '<span class="badge badge-approved">มี</span>' : '<span class="text-gray-300">-</span>') + '</td>' +
+        '<td>' + (r.status === 'active' ? '<span class="badge badge-approved">ใช้งาน</span>' : '<span class="badge badge-draft">ปิดใช้งาน</span>') + '</td>' +
+        '<td class="text-right whitespace-nowrap">' +
+          '<button id="edit-' + id + '" class="btn btn-secondary !px-2 !py-1 text-xs">แก้ไข</button> ' +
+          '<button id="reset-' + id + '" class="btn btn-secondary !px-2 !py-1 text-xs">รีเซ็ตรหัส</button> ' +
+          '<button id="toggle-' + id + '" class="btn ' + (r.status === 'active' ? 'btn-danger' : 'btn-secondary') + ' !px-2 !py-1 text-xs">' + (r.status === 'active' ? 'ปิดใช้งาน' : 'เปิดใช้งาน') + '</button>' +
+        '</td></tr>';
+    }
+
+    function toggleStatus(r) {
+      var next = r.status === 'active' ? 'inactive' : 'active';
+      App.confirm('ต้องการเปลี่ยนสถานะของ "' + r.firstName + '" เป็น ' + (next === 'active' ? 'ใช้งาน' : 'ปิดใช้งาน') + ' ใช่หรือไม่?').then(function (ok) {
+        if (!ok) return;
+        App.call('setEmployeeStatus', r.employeeId, next).then(function () {
+          App.toast('บันทึกแล้ว', 'success');
+          loadEmployees(document.getElementById('chk-inactive').checked);
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      });
+    }
+
+    function resetPin(r) {
+      App.confirm('รีเซ็ตรหัสผ่านของ "' + r.firstName + '" กลับเป็นค่าเริ่มต้น (เลขบัตร ปชช. 6 หลักท้าย) ใช่หรือไม่?').then(function (ok) {
+        if (!ok) return;
+        App.call('adminResetPin', r.employeeId, null).then(function (res) {
+          App.toast('รีเซ็ตรหัสผ่านเป็น ' + res.newPin + ' แล้ว', 'success');
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      });
+    }
+
+    function openAddModal() {
+      App.modalHtml(employeeFormHtml(null));
+      bindEmployeeForm(null);
+    }
+
+    function openEditModal(r) {
+      App.modalHtml(employeeFormHtml(r));
+      bindEmployeeForm(r);
+    }
+
+    function employeeFormHtml(r) {
+      var isEdit = !!r;
+      return (
+        '<h3 class="text-lg font-bold mb-4">' + (isEdit ? 'แก้ไขข้อมูลลูกจ้าง' : 'เพิ่มลูกจ้างใหม่') + '</h3>' +
+        '<form id="emp-form" class="grid grid-cols-2 gap-3">' +
+          (isEdit ? '' :
+            '<div class="col-span-2"><label class="label">รหัสพนักงาน *</label><input id="f-id" class="input" required></div>') +
+          '<div><label class="label">คำนำหน้า</label><input id="f-prefix" class="input" value="' + App.esc(r ? r.prefixName : '') + '"></div>' +
+          '<div><label class="label">ชื่อ *</label><input id="f-first" class="input" required value="' + App.esc(r ? r.firstName : '') + '"></div>' +
+          '<div class="col-span-2"><label class="label">นามสกุล</label><input id="f-last" class="input" value="' + App.esc(r ? r.lastName : '') + '"></div>' +
+          '<div><label class="label">กลุ่มงาน</label>' + groupSelect(r ? r.group : '') + '</div>' +
+          '<div><label class="label">ตำแหน่ง/รายละเอียด</label><input id="f-position" class="input" value="' + App.esc(r ? r.position : '') + '"></div>' +
+          '<div><label class="label">วันที่เริ่มงาน</label><input id="f-start" type="date" class="input" value="' + App.esc(r ? r.startDate : '') + '"></div>' +
+          (isEdit ? '' : '<div><label class="label">เดือนเริ่มนับเงินเดือน (YYYY-MM)</label><input id="f-startmonth" class="input" placeholder="' + App.currentMonthKey() + '"></div>') +
+          '<div><label class="label">ธนาคาร</label><input id="f-bank" class="input" value="' + App.esc(r ? r.bankName : '') + '"></div>' +
+          '<div><label class="label">เลขที่บัญชี</label><input id="f-account" class="input" value="' + App.esc(r ? r.bankAccountNo : '') + '"></div>' +
+          '<div><label class="label">เลขบัตรประชาชน</label><input id="f-citizen" class="input" value="' + App.esc(r ? r.citizenID : '') + '"></div>' +
+          '<div><label class="label">เบอร์โทร</label><input id="f-phone" class="input" value="' + App.esc(r ? r.phone : '') + '"></div>' +
+          (isEdit ? '' : '<div><label class="label">อัตราเงินเดือนเริ่มต้น</label><input id="f-salary" type="number" step="0.01" class="input"></div>') +
+          '<div class="flex items-center gap-2 pt-6"><input type="checkbox" id="f-sso" ' + (r && r.hasSSO ? 'checked' : '') + '><label for="f-sso" class="text-sm">มีการหักสมทบประกันสังคม (ปกส.)</label></div>' +
+          '<div class="col-span-2"><label class="label">หมายเหตุ</label><input id="f-note" class="input" value="' + App.esc(r ? r.note : '') + '"></div>' +
+          '<div class="col-span-2 flex justify-end gap-2 pt-2">' +
+            '<button type="button" id="emp-cancel" class="btn btn-secondary">ยกเลิก</button>' +
+            '<button type="submit" class="btn btn-primary">บันทึก</button>' +
+          '</div>' +
+        '</form>'
+      );
+    }
+
+    function groupSelect(current) {
+      var groups = ['ครูอัตราจ้าง', 'เจ้าหน้าที่', 'พนักงานขับรถ', 'ภารโรง', 'แม่บ้าน', 'ยามรักษาการณ์', 'อื่นๆ'];
+      return '<select id="f-group" class="input">' + groups.map(function (g) {
+        return '<option ' + (g === current ? 'selected' : '') + '>' + g + '</option>';
+      }).join('') + '</select>';
+    }
+
+    function bindEmployeeForm(existing) {
+      document.getElementById('emp-cancel').onclick = App.closeModal;
+      document.getElementById('emp-form').onsubmit = function (ev) {
+        ev.preventDefault();
+        var form = {
+          prefixName: val('f-prefix'), firstName: val('f-first'), lastName: val('f-last'),
+          group: val('f-group'), position: val('f-position'), startDate: val('f-start'),
+          bankName: val('f-bank'), bankAccountNo: val('f-account'), citizenID: val('f-citizen'),
+          phone: val('f-phone'), hasSSO: document.getElementById('f-sso').checked, note: val('f-note')
+        };
+        var promise;
+        if (existing) {
+          promise = App.call('updateEmployee', existing.employeeId, form);
+        } else {
+          form.employeeId = val('f-id');
+          form.startMonth = val('f-startmonth');
+          form.baseSalary = val('f-salary');
+          promise = App.call('addEmployee', form);
+        }
+        promise.then(function (res) {
+          App.toast('บันทึกสำเร็จ' + (res && res.initialPin ? (' — PIN เริ่มต้น: ' + res.initialPin) : ''), 'success');
+          App.closeModal();
+          loadEmployees();
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      };
+    }
+
+    function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  };
+</script>

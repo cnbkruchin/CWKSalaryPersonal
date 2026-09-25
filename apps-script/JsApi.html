@@ -1,0 +1,117 @@
+<script>
+  // ---------------- Global App namespace ----------------
+  window.App = window.App || {};
+
+  App.session = (function () {
+    var KEY = 'cwk_session_v1';
+    return {
+      get: function () {
+        try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; }
+      },
+      set: function (s) { localStorage.setItem(KEY, JSON.stringify(s)); },
+      clear: function () { localStorage.removeItem(KEY); }
+    };
+  })();
+
+  /** เรียกฟังก์ชันฝั่งเซิร์ฟเวอร์ (Code.gs/*.gs) แบบ Promise ทุกฟังก์ชันคืน {ok,data|error} */
+  App.api = function (fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      if (!google || !google.script || !google.script.run) {
+        reject(new Error('ใช้งานได้เฉพาะเมื่อรันบน Google Apps Script Web App เท่านั้น'));
+        return;
+      }
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.ok === false) reject(new Error(res.error || 'เกิดข้อผิดพลาด'));
+          else resolve(res && res.hasOwnProperty('data') ? res.data : res);
+        })
+        .withFailureHandler(function (err) {
+          reject(new Error(err && err.message ? err.message : String(err)));
+        })[fnName].apply(null, args);
+    });
+  };
+
+  /** เรียก API ที่ต้องแนบ token เซสชันปัจจุบันเป็นอาร์กิวเมนต์แรกเสมอ */
+  App.call = function (fnName) {
+    var session = App.session.get();
+    var token = session ? session.token : '';
+    var args = [fnName, token].concat(Array.prototype.slice.call(arguments, 1));
+    return App.api.apply(null, args).catch(function (err) {
+      if (/เซสชันหมดอายุ|กรุณาเข้าสู่ระบบ/.test(err.message)) {
+        App.session.clear();
+        App.router.go('/login');
+      }
+      throw err;
+    });
+  };
+
+  // ---------------- Toast ----------------
+  App.toast = function (message, type) {
+    var wrap = document.getElementById('toast-wrap');
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + (type || 'info');
+    el.textContent = message;
+    wrap.appendChild(el);
+    setTimeout(function () {
+      el.style.transition = 'opacity .3s';
+      el.style.opacity = '0';
+      setTimeout(function () { el.remove(); }, 300);
+    }, 3200);
+  };
+
+  // ---------------- Modal (confirm / form) ----------------
+  App.closeModal = function () { document.getElementById('modal-root').innerHTML = ''; };
+
+  App.confirm = function (message, okLabel) {
+    return new Promise(function (resolve) {
+      var root = document.getElementById('modal-root');
+      root.innerHTML =
+        '<div class="modal-backdrop"><div class="card p-6 max-w-sm w-full">' +
+        '<p class="text-sm text-gray-700 mb-5">' + App.esc(message) + '</p>' +
+        '<div class="flex justify-end gap-2">' +
+        '<button id="modal-cancel" class="btn btn-secondary">ยกเลิก</button>' +
+        '<button id="modal-ok" class="btn btn-primary">' + App.esc(okLabel || 'ยืนยัน') + '</button>' +
+        '</div></div></div>';
+      document.getElementById('modal-cancel').onclick = function () { App.closeModal(); resolve(false); };
+      document.getElementById('modal-ok').onclick = function () { App.closeModal(); resolve(true); };
+    });
+  };
+
+  App.modalHtml = function (innerHtml) {
+    var root = document.getElementById('modal-root');
+    root.innerHTML = '<div class="modal-backdrop"><div class="card p-6 max-w-lg w-full max-h-[90vh] overflow-y-auto">' + innerHtml + '</div></div>';
+  };
+
+  // ---------------- Formatting helpers ----------------
+  App.esc = function (s) {
+    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+
+  App.money = function (n) {
+    n = Number(n) || 0;
+    return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  App.currentMonthKey = function () {
+    var d = new Date();
+    var m = d.getMonth() + 1;
+    return d.getFullYear() + '-' + (m < 10 ? '0' + m : m);
+  };
+
+  App.monthOptions = function (centerMonth, before, after) {
+    var out = [];
+    var y = parseInt(centerMonth.split('-')[0], 10);
+    var m = parseInt(centerMonth.split('-')[1], 10);
+    var thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+    for (var i = -before; i <= after; i++) {
+      var d = new Date(Date.UTC(y, m - 1 + i, 1));
+      var yy = d.getUTCFullYear(), mm = d.getUTCMonth() + 1;
+      var key = yy + '-' + (mm < 10 ? '0' + mm : mm);
+      out.push({ key: key, label: thaiMonths[mm - 1] + ' ' + (yy + 543) });
+    }
+    return out;
+  };
+</script>

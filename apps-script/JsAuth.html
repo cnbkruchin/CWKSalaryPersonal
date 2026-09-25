@@ -1,0 +1,73 @@
+<script>
+  App.views = App.views || {};
+
+  App.views.login = function (root) {
+    root.innerHTML =
+      '<div class="min-h-screen flex items-center justify-center p-4">' +
+        '<div class="card p-8 w-full max-w-sm">' +
+          '<div class="text-center mb-6">' +
+            '<div class="text-2xl font-bold text-brand-900">ระบบเงินเดือนลูกจ้าง</div>' +
+            '<div class="text-sm text-gray-500 mt-1">โรงเรียนจุนวิทยาคม</div>' +
+          '</div>' +
+          '<form id="login-form" class="space-y-4">' +
+            '<div><label class="label">รหัสพนักงาน</label>' +
+              '<input id="li-id" class="input" placeholder="เช่น E001 หรือ admin" autocomplete="username" required></div>' +
+            '<div><label class="label">รหัสผ่าน (PIN)</label>' +
+              '<input id="li-pin" type="password" class="input" placeholder="••••••" autocomplete="current-password" required></div>' +
+            '<button type="submit" class="btn btn-primary w-full justify-center">เข้าสู่ระบบ</button>' +
+          '</form>' +
+          '<p class="text-xs text-gray-400 text-center mt-5">ลืมรหัสผ่าน? ติดต่อฝ่ายบุคคล/ธุรการของโรงเรียน</p>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('login-form').onsubmit = function (ev) {
+      ev.preventDefault();
+      var id = document.getElementById('li-id').value.trim();
+      var pin = document.getElementById('li-pin').value;
+      var btn = ev.target.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = 'กำลังเข้าสู่ระบบ...';
+      App.api('login', id, pin).then(function (data) {
+        App.session.set(data);
+        if (data.mustChangePin) {
+          App.showChangePinModal(true);
+        } else {
+          App.router.go(data.role === 'admin' ? '/admin/payroll' : '/me');
+        }
+      }).catch(function (err) {
+        App.toast(err.message, 'error');
+        btn.disabled = false; btn.textContent = 'เข้าสู่ระบบ';
+      });
+    };
+  };
+
+  App.showChangePinModal = function (forced) {
+    App.modalHtml(
+      '<h3 class="text-lg font-bold mb-1">' + (forced ? 'ตั้งรหัสผ่านใหม่ก่อนใช้งาน' : 'เปลี่ยนรหัสผ่าน') + '</h3>' +
+      '<p class="text-sm text-gray-500 mb-4">' + (forced ? 'บัญชีนี้ยังใช้รหัสผ่านเริ่มต้นอยู่ กรุณาตั้งรหัสผ่านใหม่ของคุณเอง' : 'กรอกรหัสผ่านเดิมและรหัสผ่านใหม่') + '</p>' +
+      '<form id="pin-form" class="space-y-3">' +
+        '<div><label class="label">รหัสผ่านเดิม</label><input id="pin-old" type="password" class="input" required></div>' +
+        '<div><label class="label">รหัสผ่านใหม่ (อย่างน้อย 4 หลัก)</label><input id="pin-new" type="password" class="input" required></div>' +
+        '<div><label class="label">ยืนยันรหัสผ่านใหม่</label><input id="pin-new2" type="password" class="input" required></div>' +
+        '<div class="flex justify-end gap-2 pt-2">' +
+        (forced ? '' : '<button type="button" id="pin-cancel" class="btn btn-secondary">ยกเลิก</button>') +
+        '<button type="submit" class="btn btn-primary">บันทึก</button></div>' +
+      '</form>'
+    );
+    if (!forced) {
+      document.getElementById('pin-cancel').onclick = App.closeModal;
+    }
+    document.getElementById('pin-form').onsubmit = function (ev) {
+      ev.preventDefault();
+      var oldPin = document.getElementById('pin-old').value;
+      var newPin = document.getElementById('pin-new').value;
+      var newPin2 = document.getElementById('pin-new2').value;
+      if (newPin !== newPin2) { App.toast('รหัสผ่านใหม่ไม่ตรงกัน', 'error'); return; }
+      App.call('changeMyPin', oldPin, newPin).then(function () {
+        App.toast('เปลี่ยนรหัสผ่านสำเร็จ', 'success');
+        App.closeModal();
+        var session = App.session.get();
+        App.router.go(session.role === 'admin' ? '/admin/payroll' : '/me');
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    };
+  };
+</script>

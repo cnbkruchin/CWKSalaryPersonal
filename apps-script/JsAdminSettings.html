@@ -1,0 +1,54 @@
+<script>
+  App.views.adminSettings = function (root) {
+    root.innerHTML = App.adminShell('settings', '<div class="p-6 max-w-3xl"><p class="text-gray-400">กำลังโหลด...</p></div>');
+    App.call('getSettingsForClient').then(renderForm).catch(function (err) { App.toast(err.message, 'error'); });
+
+    function field(key, label, settings, type) {
+      return '<div><label class="label">' + label + '</label><input id="s-' + key + '" type="' + (type || 'text') + '" class="input" value="' + App.esc(settings[key] || '') + '"></div>';
+    }
+
+    function renderForm(settings) {
+      var body = document.querySelector('#app-root .p-6');
+      body.innerHTML =
+        '<h1 class="text-xl font-bold mb-4">ตั้งค่าระบบ</h1>' +
+        '<form id="settings-form" class="card p-6 space-y-6">' +
+          '<div><h2 class="font-semibold mb-3">ข้อมูลโรงเรียน</h2><div class="grid grid-cols-2 gap-3">' +
+            field('SchoolName', 'ชื่อโรงเรียน', settings) +
+            field('SchoolAddress', 'ที่อยู่/อำเภอ-จังหวัด', settings) +
+            '<div class="col-span-2">' + field('SchoolDistrictOffice', 'สังกัดสำนักงานเขตพื้นที่การศึกษา', settings) + '</div>' +
+          '</div></div>' +
+
+          '<div><h2 class="font-semibold mb-3">อัตราการหักเงินสมทบ</h2><div class="grid grid-cols-3 gap-3">' +
+            field('SSORate', 'อัตราประกันสังคม (เช่น 0.05 = 5%)', settings, 'number') +
+            field('SSOWageCap', 'เพดานเงินเดือนคำนวณ ปกส. (บาท)', settings, 'number') +
+            field('CompFundRate', 'อัตรากองทุนเงินทดแทน', settings, 'number') +
+          '</div></div>' +
+
+          '<div><h2 class="font-semibold mb-3">ผู้ลงนามในบันทึกข้อความขออนุมัติ</h2><div class="grid grid-cols-2 gap-3">' +
+            field('FinanceOfficerName', 'ชื่อเจ้าหน้าที่การเงิน', settings) + field('FinanceOfficerTitle', 'ตำแหน่ง', settings) +
+            field('BudgetHeadName', 'ชื่อหัวหน้างบประมาณ', settings) + field('BudgetHeadTitle', 'ตำแหน่ง', settings) +
+            field('DeputyDirectorName', 'ชื่อรองผู้อำนวยการ', settings) + field('DeputyDirectorTitle', 'ตำแหน่ง', settings) +
+            field('DirectorName', 'ชื่อผู้อำนวยการ', settings) + field('DirectorTitle', 'ตำแหน่ง', settings) +
+          '</div></div>' +
+
+          '<div><h2 class="font-semibold mb-3">ระบบ</h2><div class="grid grid-cols-2 gap-3">' +
+            field('SessionTimeoutMinutes', 'หมดเวลาเซสชันอัตโนมัติ (นาที)', settings, 'number') +
+          '</div></div>' +
+
+          '<div class="flex justify-end"><button type="submit" class="btn btn-primary">บันทึกการตั้งค่า</button></div>' +
+        '</form>';
+
+      document.getElementById('settings-form').onsubmit = function (ev) {
+        ev.preventDefault();
+        var keys = ['SchoolName', 'SchoolAddress', 'SchoolDistrictOffice', 'SSORate', 'SSOWageCap', 'CompFundRate',
+          'FinanceOfficerName', 'FinanceOfficerTitle', 'BudgetHeadName', 'BudgetHeadTitle',
+          'DeputyDirectorName', 'DeputyDirectorTitle', 'DirectorName', 'DirectorTitle', 'SessionTimeoutMinutes'];
+        var patch = {};
+        keys.forEach(function (k) { patch[k] = document.getElementById('s-' + k).value; });
+        App.call('updateSettings', patch).then(function () {
+          App.toast('บันทึกการตั้งค่าสำเร็จ', 'success');
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      };
+    }
+  };
+</script>

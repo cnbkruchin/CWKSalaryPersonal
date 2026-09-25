@@ -1,0 +1,71 @@
+<script>
+  App.views.employeePortal = function (root, params) {
+    var session = App.session.get();
+    root.innerHTML =
+      '<div class="min-h-screen">' +
+        App.topbar('สลิปเงินเดือนของฉัน', session.fullName) +
+        '<div class="max-w-4xl mx-auto p-6">' +
+          '<div class="flex items-center gap-3 mb-5">' +
+            '<label class="label m-0">เลือกเดือน</label>' +
+            '<select id="month-select" class="input max-w-xs"></select>' +
+          '</div>' +
+          '<div id="slip-preview"><p class="text-gray-400">กำลังโหลด...</p></div>' +
+          '<div id="history-list" class="mt-8"></div>' +
+        '</div>' +
+      '</div>';
+
+    App.bindTopbarActions();
+
+    App.call('listMyPayslipMonths').then(function (months) {
+      if (!months.length) {
+        document.getElementById('slip-preview').innerHTML = '<div class="card p-8 text-center text-gray-400">ยังไม่มีสลิปเงินเดือนของคุณในระบบ<br>กรุณาติดต่อฝ่ายการเงินหากคาดว่าควรมีข้อมูลแล้ว</div>';
+        return;
+      }
+      var wantMonth = (params && params.month) || App.currentMonthKey();
+      var available = months.map(function (m) { return m.month; });
+      var selected = available.indexOf(wantMonth) !== -1 ? wantMonth : months[0].month;
+
+      var sel = document.getElementById('month-select');
+      sel.innerHTML = months.map(function (m) {
+        return '<option value="' + m.month + '" ' + (m.month === selected ? 'selected' : '') + '>' + App.esc(m.monthLabel) + '</option>';
+      }).join('');
+      sel.onchange = function () { loadSlip(sel.value); };
+
+      renderHistory(months, selected);
+      loadSlip(selected);
+    }).catch(function (err) { App.toast(err.message, 'error'); });
+
+    function loadSlip(month) {
+      document.getElementById('slip-preview').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('getMyPayslip', month).then(function (slip) {
+        document.getElementById('slip-preview').innerHTML =
+          '<div class="no-print mb-3 text-right"><button id="btn-print-my" class="btn btn-primary">พิมพ์ / ดาวน์โหลด PDF</button></div>' +
+          App.renderPayslip(slip);
+        document.getElementById('btn-print-my').onclick = function () {
+          App.showPrintView([slip], 'สลิปเงินเดือน — ' + slip.monthLabel, '#/me?month=' + month);
+        };
+      }).catch(function (err) {
+        document.getElementById('slip-preview').innerHTML = '<div class="card p-6 text-gray-400">' + App.esc(err.message) + '</div>';
+      });
+    }
+
+    function renderHistory(months, selected) {
+      document.getElementById('history-list').innerHTML =
+        '<h2 class="font-semibold mb-2 text-sm text-gray-500">ประวัติย้อนหลัง</h2>' +
+        '<div class="card overflow-x-auto"><table class="table-clean w-full">' +
+          '<thead><tr><th>เดือน</th><th class="text-right">ยอดสุทธิ</th><th></th></tr></thead><tbody>' +
+          months.map(function (m) {
+            return '<tr><td>' + App.esc(m.monthLabel) + '</td><td class="text-right">' + App.money(m.netPay) + ' บาท</td>' +
+              '<td class="text-right"><button data-m="' + m.month + '" class="btn-view-month btn btn-secondary !px-2 !py-1 text-xs">' + (m.month === selected ? 'กำลังดู' : 'ดู') + '</button></td></tr>';
+          }).join('') +
+        '</tbody></table></div>';
+      document.querySelectorAll('.btn-view-month').forEach(function (btn) {
+        btn.onclick = function () {
+          var m = btn.getAttribute('data-m');
+          document.getElementById('month-select').value = m;
+          loadSlip(m);
+        };
+      });
+    }
+  };
+</script>

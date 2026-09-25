@@ -1,0 +1,220 @@
+<script>
+  App.views.adminPayroll = function (root, params) {
+    var month = (params && params.month) || App.currentMonthKey();
+
+    root.innerHTML = App.adminShell('payroll',
+      '<div class="p-6">' +
+        '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
+          '<h1 class="text-xl font-bold">รอบจ่ายเงินเดือน</h1>' +
+          '<div class="flex items-center gap-2">' +
+            '<select id="month-select" class="input"></select>' +
+            '<button id="btn-load" class="btn btn-secondary">สร้าง/โหลดรอบจ่าย</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="payroll-body"><p class="text-gray-400">เลือกเดือนแล้วกด "สร้าง/โหลดรอบจ่าย"</p></div>' +
+      '</div>'
+    );
+
+    var monthSelect = document.getElementById('month-select');
+    App.monthOptions(App.currentMonthKey(), 12, 2).reverse().forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.key; opt.textContent = o.label;
+      if (o.key === month) opt.selected = true;
+      monthSelect.appendChild(opt);
+    });
+    document.getElementById('btn-load').onclick = function () { loadRun(monthSelect.value); };
+    loadRun(month);
+
+    var currentRun = null;
+
+    function loadRun(m) {
+      document.getElementById('payroll-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('getOrCreatePayrollRun', m).then(function (run) {
+        currentRun = run;
+        renderRun(run);
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function renderRun(run) {
+      var approved = run.status === 'approved';
+      var body = document.getElementById('payroll-body');
+      body.innerHTML =
+        '<div class="flex items-center justify-between mb-3">' +
+          '<div class="flex items-center gap-2">' +
+            '<span class="text-lg font-semibold">' + App.esc(run.monthLabel) + '</span>' +
+            '<span class="badge ' + (approved ? 'badge-approved' : 'badge-draft') + '">' + (approved ? 'อนุมัติแล้ว' : 'แบบร่าง') + '</span>' +
+          '</div>' +
+          '<div class="flex gap-2">' +
+            '<button id="btn-print-slips" class="btn btn-secondary">พิมพ์สลิปทั้งหมด</button>' +
+            (approved
+              ? '<button id="btn-reopen" class="btn btn-danger">เปิดรอบแก้ไขอีกครั้ง</button>'
+              : '<button id="btn-approve" class="btn btn-primary">อนุมัติและปิดรอบ</button>') +
+          '</div>' +
+        '</div>' +
+        '<div class="card overflow-x-auto">' +
+          '<table class="table-clean w-full">' +
+            '<thead><tr><th>ลูกจ้าง</th><th class="text-right">เงินเดือน</th><th class="text-right">เพิ่มพิเศษ</th><th class="text-right">ตกเบิก</th>' +
+            '<th class="text-right">รวมรับ</th><th class="text-right">ปกส.</th><th class="text-right">หักอื่นๆ</th><th class="text-right">รวมหัก</th><th class="text-right">สุทธิ</th><th></th></tr></thead>' +
+            '<tbody>' + run.lines.map(rowHtml).join('') + '</tbody>' +
+            '<tfoot><tr class="font-bold">' +
+              '<td>รวม (' + run.lines.length + ' คน)</td>' +
+              '<td class="text-right">' + App.money(run.totals.baseSalary) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.allowance) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.backPay) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.grossPay) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.ssoEmployee) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.otherDeductionTotal) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.totalDeduction) + '</td>' +
+              '<td class="text-right">' + App.money(run.totals.netPay) + '</td><td></td>' +
+            '</tr></tfoot>' +
+          '</table>' +
+        '</div>' +
+        '<p class="text-xs text-gray-400 mt-2">ตัวเลขรวมเป็นตัวหนังสือ: ' + App.esc(run.totalsText) + '</p>';
+
+      document.getElementById('btn-print-slips').onclick = printAll;
+      if (approved) {
+        document.getElementById('btn-reopen').onclick = function () {
+          App.confirm('เปิดรอบแก้ไขอีกครั้ง? สลิปที่พนักงานเห็นอยู่จะถูกซ่อนจนกว่าจะอนุมัติใหม่').then(function (ok) {
+            if (!ok) return;
+            App.call('reopenPayrollRun', run.month).then(function () { loadRun(run.month); }).catch(function (err) { App.toast(err.message, 'error'); });
+          });
+        };
+      } else {
+        document.getElementById('btn-approve').onclick = function () {
+          App.confirm('อนุมัติและปิดรอบจ่ายเดือน ' + run.monthLabel + '? หลังจากนี้ลูกจ้างจะเห็นสลิปของตัวเองทันที').then(function (ok) {
+            if (!ok) return;
+            App.call('approvePayrollRun', run.month).then(function () {
+              App.toast('อนุมัติรอบจ่ายสำเร็จ', 'success');
+              loadRun(run.month);
+            }).catch(function (err) { App.toast(err.message, 'error'); });
+          });
+        };
+      }
+
+      if (!approved) {
+        run.lines.forEach(function (l) {
+          var btn = document.getElementById('edit-' + cssId(l.employeeId));
+          if (btn) btn.onclick = function () { openEditModal(run.month, l); };
+        });
+      }
+    }
+
+    function cssId(id) { return String(id).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+    function rowHtml(l) {
+      var pendingBadge = (l.pendingBackPay && l.pendingBackPay.count > 0)
+        ? '<div class="text-xs text-amber-600 mt-0.5">ค้างตกเบิก ' + App.money(l.pendingBackPay.total) + ' บาท</div>' : '';
+      return '<tr>' +
+        '<td>' + App.esc(l.fullName) + pendingBadge + '</td>' +
+        '<td class="text-right">' + App.money(l.baseSalary) + '</td>' +
+        '<td class="text-right">' + App.money(l.allowance) + '</td>' +
+        '<td class="text-right">' + App.money(l.backPay) + '</td>' +
+        '<td class="text-right font-medium">' + App.money(l.grossPay) + '</td>' +
+        '<td class="text-right">' + App.money(l.ssoEmployee) + '</td>' +
+        '<td class="text-right">' + App.money(l.otherDeductionTotal) + '</td>' +
+        '<td class="text-right">' + App.money(l.totalDeduction) + '</td>' +
+        '<td class="text-right font-bold">' + App.money(l.netPay) + '</td>' +
+        '<td>' + (l.status === 'approved' ? '' : '<button id="edit-' + cssId(l.employeeId) + '" class="btn btn-secondary !px-2 !py-1 text-xs">แก้ไข</button>') + '</td>' +
+      '</tr>';
+    }
+
+    function printAll() {
+      App.call('getPayslipsForPrint', currentRun.month).then(function (slips) {
+        App.showPrintView(slips, 'พิมพ์สลิปเงินเดือน — ' + currentRun.monthLabel, '#/admin/payroll?month=' + currentRun.month);
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function openEditModal(month, line) {
+      renderEditModal(month, line);
+    }
+
+    function renderEditModal(month, line) {
+      var deductionRows = line.deductions.map(function (d) {
+        return '<tr><td>' + App.esc(d.category) + (d.label ? ' - ' + App.esc(d.label) : '') + '</td>' +
+          '<td class="text-right">' + App.money(d.amount) + '</td>' +
+          '<td><button data-ddid="' + App.esc(d.deductionId) + '" class="btn-remove-ded btn btn-danger !px-2 !py-0.5 text-xs">ลบ</button></td></tr>';
+      }).join('');
+
+      App.modalHtml(
+        '<h3 class="text-lg font-bold mb-1">' + App.esc(line.fullName) + '</h3>' +
+        '<p class="text-sm text-gray-500 mb-4">แก้ไขรายการเดือน ' + App.esc(currentRun.monthLabel) + '</p>' +
+        '<form id="line-form" class="grid grid-cols-2 gap-3">' +
+          '<div><label class="label">เงินเพิ่มพิเศษ</label><input id="e-allow" type="number" step="0.01" class="input" value="' + line.allowance + '"></div>' +
+          '<div><label class="label">หมายเหตุเพิ่มพิเศษ</label><input id="e-allow-note" class="input" value="' + App.esc(line.allowanceNote) + '"></div>' +
+          '<div><label class="label">ตกเบิก (กรอกเอง)</label><input id="e-backpay" type="number" step="0.01" class="input" value="' + line.backPay + '"></div>' +
+          '<div><label class="label">หมายเหตุตกเบิก</label><input id="e-backpay-note" class="input" value="' + App.esc(line.backPayNote) + '"></div>' +
+          '<div><label class="label">ประกันสังคม (ปรับเองได้)</label><input id="e-sso" type="number" step="0.01" class="input" value="' + line.ssoEmployee + '"></div>' +
+          '<div></div>' +
+          (line.pendingBackPay && line.pendingBackPay.count > 0
+            ? '<div class="col-span-2"><button type="button" id="btn-apply-pending" class="btn btn-secondary w-full justify-center">ดึงตกเบิกค้างจ่าย ' + App.money(line.pendingBackPay.total) + ' บาท เข้ารอบนี้</button></div>'
+            : '') +
+        '</form>' +
+        '<div class="mt-4">' +
+          '<h4 class="font-semibold text-sm mb-2">รายการหักอื่นๆ</h4>' +
+          '<table class="table-clean w-full mb-2">' + (deductionRows || '<tr><td class="text-gray-400 text-sm">ไม่มีรายการ</td></tr>') + '</table>' +
+          '<div class="flex gap-2">' +
+            '<select id="d-category" class="input"><option>เงินยืม</option><option>เกษียณ</option><option>อื่นๆ</option></select>' +
+            '<input id="d-label" class="input" placeholder="รายละเอียด">' +
+            '<input id="d-amount" type="number" step="0.01" class="input" placeholder="จำนวนเงิน" style="max-width:8rem">' +
+            '<button type="button" id="btn-add-ded" class="btn btn-secondary">เพิ่ม</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="flex justify-end gap-2 pt-4">' +
+          '<button type="button" id="edit-cancel" class="btn btn-secondary">ปิด</button>' +
+          '<button type="button" id="edit-save" class="btn btn-primary">บันทึก</button>' +
+        '</div>'
+      );
+
+      document.getElementById('edit-cancel').onclick = function () { App.closeModal(); loadRun(month); };
+      document.getElementById('edit-save').onclick = saveLine;
+
+      document.querySelectorAll('.btn-remove-ded').forEach(function (btn) {
+        btn.onclick = function () {
+          App.call('removePayrollDeduction', month, line.employeeId, btn.getAttribute('data-ddid')).then(function () {
+            refreshLine();
+          }).catch(function (err) { App.toast(err.message, 'error'); });
+        };
+      });
+
+      document.getElementById('btn-add-ded').onclick = function () {
+        var amount = document.getElementById('d-amount').value;
+        if (!amount || Number(amount) <= 0) { App.toast('กรอกจำนวนเงิน', 'error'); return; }
+        App.call('addPayrollDeduction', month, line.employeeId, document.getElementById('d-category').value, document.getElementById('d-label').value, amount).then(function () {
+          refreshLine();
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      };
+
+      var applyBtn = document.getElementById('btn-apply-pending');
+      if (applyBtn) {
+        applyBtn.onclick = function () {
+          App.call('applyPendingBackPay', month, line.employeeId).then(function () {
+            App.toast('ดึงตกเบิกค้างจ่ายสำเร็จ', 'success');
+            refreshLine();
+          }).catch(function (err) { App.toast(err.message, 'error'); });
+        };
+      }
+
+      function saveLine() {
+        App.call('updatePayrollLine', month, line.employeeId, {
+          allowance: document.getElementById('e-allow').value,
+          allowanceNote: document.getElementById('e-allow-note').value,
+          backPay: document.getElementById('e-backpay').value,
+          backPayNote: document.getElementById('e-backpay-note').value,
+          ssoEmployee: document.getElementById('e-sso').value
+        }).then(function () {
+          App.toast('บันทึกแล้ว', 'success');
+          App.closeModal();
+          loadRun(month);
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      }
+
+      function refreshLine() {
+        App.call('getPayrollRun', month).then(function (run) {
+          currentRun = run;
+          var updated = run.lines.filter(function (l) { return l.employeeId === line.employeeId; })[0];
+          if (updated) renderEditModal(month, updated);
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      }
+    }
+  };
+</script>

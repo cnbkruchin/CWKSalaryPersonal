@@ -1,0 +1,87 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Sarabun', 'sans-serif'] },
+        colors: {
+          brand: {
+            50: '#eef4ff', 100: '#dce7ff', 200: '#b9d0ff', 300: '#8cb1ff',
+            400: '#5c8dff', 500: '#3868f5', 600: '#264ed6', 700: '#1f3fac',
+            800: '#1c3689', 900: '#1a2f6e'
+          }
+        }
+      }
+    }
+  };
+</script>
+<style>
+  html, body { font-family: 'Sarabun', sans-serif; background: #f4f6fb; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #c7d2e8; border-radius: 8px; }
+
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 1px 3px rgba(20, 30, 60, .08), 0 1px 2px rgba(20,30,60,.04); }
+  .btn { display: inline-flex; align-items: center; gap: .4rem; padding: .55rem 1.1rem; border-radius: 10px; font-weight: 600; font-size: .9rem; transition: .15s; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #264ed6; color: #fff; }
+  .btn-primary:hover { background: #1f3fac; }
+  .btn-secondary { background: #eef1f8; color: #223; }
+  .btn-secondary:hover { background: #e1e6f2; }
+  .btn-danger { background: #fdecec; color: #b3261e; }
+  .btn-danger:hover { background: #fbdbdb; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .input { border: 1px solid #dbe1ee; border-radius: 10px; padding: .5rem .75rem; font-size: .9rem; width: 100%; background: #fff; }
+  .input:focus { outline: 2px solid #8cb1ff; border-color: transparent; }
+  .label { font-size: .8rem; color: #56607a; font-weight: 600; margin-bottom: .25rem; display: block; }
+  .table-clean th { text-align: left; font-size: .78rem; text-transform: uppercase; letter-spacing: .02em; color: #6b7690; padding: .5rem .75rem; border-bottom: 1px solid #e7ebf3; }
+  .table-clean td { padding: .55rem .75rem; border-bottom: 1px solid #f0f2f8; font-size: .9rem; }
+  .table-clean tr:hover td { background: #f8faff; }
+  .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+  .badge-draft { background: #fff4dd; color: #92640a; }
+  .badge-approved { background: #e3f8ea; color: #1c7a3f; }
+  .nav-link { display: flex; align-items: center; gap: .6rem; padding: .6rem .9rem; border-radius: 10px; color: #566; font-weight: 600; font-size: .9rem; }
+  .nav-link:hover { background: #eef1f8; }
+  .nav-link.active { background: #264ed6; color: #fff; }
+
+  #toast-wrap { position: fixed; top: 1rem; right: 1rem; z-index: 100; display: flex; flex-direction: column; gap: .5rem; }
+  .toast { padding: .7rem 1.1rem; border-radius: 10px; font-size: .88rem; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,.12); color: #fff; animation: slidein .15s ease-out; }
+  .toast-success { background: #1c7a3f; }
+  .toast-error { background: #b3261e; }
+  .toast-info { background: #264ed6; }
+  @keyframes slidein { from { transform: translateY(-8px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(15,20,35,.45); display: flex; align-items: center; justify-content: center; z-index: 90; padding: 1rem; }
+
+  /* ---------- สลิปเงินเดือน A5 แนวนอน ---------- */
+  .payslip {
+    width: 210mm; min-height: 148mm; background: #fff; margin: 0 auto 12px;
+    border: 1px solid #d7deec; border-radius: 6px; padding: 8mm 10mm; box-sizing: border-box;
+    display: flex; flex-direction: column;
+  }
+  .payslip-header { text-align: center; border-bottom: 2px solid #264ed6; padding-bottom: 6px; margin-bottom: 8px; }
+  .payslip-header .school { font-size: 1.15rem; font-weight: 700; color: #1a2f6e; }
+  .payslip-header .title { font-size: .95rem; color: #445; margin-top: 2px; }
+  .payslip-meta { display: flex; justify-content: space-between; font-size: .85rem; margin-bottom: 8px; }
+  .payslip-meta .name { font-weight: 700; font-size: 1rem; }
+  .payslip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; flex: 1; }
+  .payslip-box h4 { font-size: .82rem; font-weight: 700; background: #eef1f8; padding: .3rem .6rem; border-radius: 6px 6px 0 0; }
+  .payslip-box table { width: 100%; border-collapse: collapse; border: 1px solid #e7ebf3; border-top: none; }
+  .payslip-box td { padding: .3rem .6rem; font-size: .85rem; border-bottom: 1px dashed #eceff6; }
+  .payslip-box td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+  .payslip-box tr.sum td { font-weight: 700; border-top: 1px solid #cfd6e6; border-bottom: none; }
+  .payslip-net { margin-top: 10px; text-align: center; background: #f3f7ff; border: 1px dashed #8cb1ff; border-radius: 8px; padding: 8px; }
+  .payslip-net .amount { font-size: 1.5rem; font-weight: 700; color: #1a2f6e; }
+  .payslip-net .text { font-size: .8rem; color: #556; }
+  .payslip-footer { display: flex; justify-content: space-between; margin-top: 10px; font-size: .8rem; color: #556; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+    .payslip { border: none; border-radius: 0; box-shadow: none; page-break-after: always; margin: 0 auto; }
+    .no-print { display: none !important; }
+  }
+</style>
+<style id="page-size-style"></style>

@@ -1,0 +1,122 @@
+<script>
+  App.views.adminSalary = function (root) {
+    root.innerHTML = App.adminShell('salary',
+      '<div class="p-6 space-y-6">' +
+        '<div>' +
+          '<div class="flex items-center justify-between mb-3">' +
+            '<h1 class="text-xl font-bold">เลื่อนขั้น / ปรับเงินเดือน / ตกเบิก</h1>' +
+          '</div>' +
+          '<div class="card p-4">' +
+            '<label class="label">เลือกลูกจ้าง</label>' +
+            '<select id="emp-select" class="input max-w-md"></select>' +
+          '</div>' +
+        '</div>' +
+        '<div id="pending-backpay-section"></div>' +
+        '<div id="history-section"></div>' +
+      '</div>'
+    );
+
+    var employees = [];
+    App.call('listEmployees', false).then(function (rows) {
+      employees = rows;
+      var sel = document.getElementById('emp-select');
+      sel.innerHTML = '<option value="">-- เลือกลูกจ้าง --</option>' + rows.map(function (r) {
+        return '<option value="' + App.esc(r.employeeId) + '">' + App.esc((r.prefixName || '') + r.firstName + ' ' + r.lastName) + '</option>';
+      }).join('');
+      sel.onchange = function () { renderEmployeeSection(sel.value); };
+    }).catch(function (err) { App.toast(err.message, 'error'); });
+
+    loadPendingBackPay();
+
+    function loadPendingBackPay() {
+      App.call('listBackPayQueue', null, 'pending').then(function (rows) {
+        var wrap = document.getElementById('pending-backpay-section');
+        if (!rows.length) {
+          wrap.innerHTML = '<div class="card p-4 text-sm text-gray-400">ไม่มีรายการตกเบิกค้างจ่ายในขณะนี้</div>';
+          return;
+        }
+        var empName = {};
+        employees.forEach(function (e) { empName[e.employeeId] = (e.prefixName || '') + e.firstName + ' ' + e.lastName; });
+        var total = rows.reduce(function (s, r) { return s + r.totalBackPay; }, 0);
+        wrap.innerHTML =
+          '<div class="card p-4">' +
+            '<h2 class="font-bold mb-3">รายการตกเบิกค้างจ่ายทั้งหมด (' + rows.length + ' รายการ &middot; รวม ' + App.money(total) + ' บาท)</h2>' +
+            '<table class="table-clean w-full"><thead><tr><th>ลูกจ้าง</th><th>เดือน</th><th>อัตราเก่า → ใหม่</th><th class="text-right">ยอดตกเบิก</th><th>หมายเหตุ</th></tr></thead><tbody>' +
+            rows.map(function (r) {
+              return '<tr><td>' + App.esc(empName[r.employeeId] || r.employeeId) + '</td><td>' + App.esc(r.fromMonth) + '</td>' +
+                '<td>' + App.money(r.oldBaseSalary) + ' → ' + App.money(r.newBaseSalary) + '</td>' +
+                '<td class="text-right font-semibold">' + App.money(r.totalBackPay) + '</td><td class="text-gray-500 text-xs">' + App.esc(r.note) + '</td></tr>';
+            }).join('') +
+            '</tbody></table>' +
+            '<p class="text-xs text-gray-400 mt-3">ไปที่หน้า "รอบจ่ายเงินเดือน" แล้วกด "ดึงตกเบิกค้างจ่าย" ที่แถวของพนักงานเพื่อรวมยอดนี้เข้ารอบจ่ายเดือนที่ต้องการ</p>' +
+          '</div>';
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function renderEmployeeSection(employeeId) {
+      var wrap = document.getElementById('history-section');
+      if (!employeeId) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('listSalaryHistory', employeeId).then(function (rows) {
+        wrap.innerHTML =
+          '<div class="card p-4">' +
+            '<div class="flex items-center justify-between mb-3">' +
+              '<h2 class="font-bold">ประวัติเงินเดือน</h2>' +
+              '<button id="btn-add-adj" class="btn btn-primary">+ เพิ่มรายการปรับเงินเดือน</button>' +
+            '</div>' +
+            (rows.length ?
+              '<table class="table-clean w-full"><thead><tr><th>เดือนที่มีผล</th><th class="text-right">อัตราเงินเดือน</th><th>ประเภท</th><th>อนุมัติโดย</th><th>หมายเหตุ</th></tr></thead><tbody>' +
+              rows.map(function (r) {
+                return '<tr><td>' + App.esc(r.effectiveMonth) + '</td><td class="text-right">' + App.money(r.baseSalary) + '</td>' +
+                  '<td>' + App.esc(r.changeType) + '</td><td>' + App.esc(r.approvedBy || '-') + '</td><td class="text-gray-500 text-xs">' + App.esc(r.note || '') + '</td></tr>';
+              }).join('') + '</tbody></table>'
+              : '<p class="text-sm text-gray-400">ยังไม่มีประวัติเงินเดือน</p>') +
+          '</div>';
+        document.getElementById('btn-add-adj').onclick = function () { openAdjustModal(employeeId); };
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function openAdjustModal(employeeId) {
+      App.modalHtml(
+        '<h3 class="text-lg font-bold mb-1">เพิ่มรายการปรับเงินเดือน</h3>' +
+        '<p class="text-sm text-gray-500 mb-4">หากเดือนที่มีผลเป็นเดือนย้อนหลังที่จ่ายเงินเดือนไปแล้ว ระบบจะคำนวณยอดตกเบิกให้อัตโนมัติ</p>' +
+        '<form id="adj-form" class="grid grid-cols-2 gap-3">' +
+          '<div><label class="label">เดือนที่มีผล (YYYY-MM) *</label><input id="a-month" class="input" placeholder="' + App.currentMonthKey() + '" required></div>' +
+          '<div><label class="label">อัตราเงินเดือนใหม่ *</label><input id="a-salary" type="number" step="0.01" class="input" required></div>' +
+          '<div><label class="label">ประเภท</label><select id="a-type" class="input">' +
+            ['เลื่อนขั้น', 'บรรจุใหม่', 'ปรับวุฒิ', 'อื่นๆ'].map(function (t) { return '<option>' + t + '</option>'; }).join('') +
+          '</select></div>' +
+          '<div><label class="label">วันที่อนุมัติ</label><input id="a-date" type="date" class="input"></div>' +
+          '<div class="col-span-2"><label class="label">ผู้อนุมัติ</label><input id="a-approver" class="input"></div>' +
+          '<div class="col-span-2"><label class="label">หมายเหตุ</label><input id="a-note" class="input"></div>' +
+          '<div class="col-span-2 flex justify-end gap-2 pt-2">' +
+            '<button type="button" id="adj-cancel" class="btn btn-secondary">ยกเลิก</button>' +
+            '<button type="submit" class="btn btn-primary">บันทึก</button>' +
+          '</div>' +
+        '</form>'
+      );
+      document.getElementById('adj-cancel').onclick = App.closeModal;
+      document.getElementById('adj-form').onsubmit = function (ev) {
+        ev.preventDefault();
+        App.call('addSalaryAdjustment', {
+          employeeId: employeeId,
+          effectiveMonth: document.getElementById('a-month').value.trim(),
+          baseSalary: document.getElementById('a-salary').value,
+          changeType: document.getElementById('a-type').value,
+          approvedDate: document.getElementById('a-date').value,
+          approvedBy: document.getElementById('a-approver').value,
+          note: document.getElementById('a-note').value
+        }).then(function (res) {
+          App.closeModal();
+          if (res.backPayMonths > 0) {
+            App.toast('บันทึกสำเร็จ และคำนวณตกเบิก ' + res.backPayMonths + ' เดือน รวม ' + App.money(res.backPayTotal) + ' บาท', 'success');
+          } else {
+            App.toast('บันทึกสำเร็จ', 'success');
+          }
+          renderEmployeeSection(employeeId);
+          loadPendingBackPay();
+        }).catch(function (err) { App.toast(err.message, 'error'); });
+      };
+    }
+  };
+</script>

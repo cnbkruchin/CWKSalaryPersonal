@@ -1,0 +1,69 @@
+<script>
+  /** ตั้งขนาดกระดาษ/ขอบกระดาษสำหรับการพิมพ์ครั้งถัดไป (เพราะแต่ละรายงานใช้ขนาดกระดาษไม่เท่ากัน) */
+  App.setPrintPageStyle = function (css) {
+    document.getElementById('page-size-style').textContent = css;
+  };
+
+  /** สร้าง HTML ของสลิปเงินเดือน 1 ใบ (A5 แนวนอน) ใช้ร่วมกันทั้งฝั่งแอดมิน (พิมพ์รวม) และพนักงาน (ดูของตัวเอง) */
+  App.renderPayslip = function (s) {
+    var otherRows = (s.otherDeductions || []).map(function (d) {
+      return '<tr><td>' + App.esc(d.label) + '</td><td class="amt">' + App.money(d.amount) + '</td></tr>';
+    }).join('');
+
+    return (
+      '<div class="payslip">' +
+        '<div class="payslip-header">' +
+          '<div class="school">' + App.esc(s.schoolName) + '</div>' +
+          '<div class="title">สลิปเงินเดือนลูกจ้างชั่วคราว &middot; ประจำเดือน' + App.esc(s.monthLabel) + '</div>' +
+        '</div>' +
+        '<div class="payslip-meta">' +
+          '<div><div class="name">' + App.esc(s.fullName) + '</div>' +
+              '<div>' + App.esc(s.group || '') + (s.position ? (' &middot; ' + App.esc(s.position)) : '') + '</div></div>' +
+          '<div class="text-right"><div>รหัสพนักงาน: ' + App.esc(s.employeeId) + '</div>' +
+              '<div>' + App.esc(s.bankName || '') + (s.bankAccountNo ? (' เลขที่ ' + App.esc(s.bankAccountNo)) : '') + '</div></div>' +
+        '</div>' +
+        '<div class="payslip-grid">' +
+          '<div class="payslip-box"><h4>รายรับ</h4><table>' +
+            '<tr><td>เงินเดือน</td><td class="amt">' + App.money(s.baseSalary) + '</td></tr>' +
+            (s.allowance ? '<tr><td>เงินเพิ่มพิเศษ' + (s.allowanceNote ? ' (' + App.esc(s.allowanceNote) + ')' : '') + '</td><td class="amt">' + App.money(s.allowance) + '</td></tr>' : '') +
+            (s.backPay ? '<tr><td>เงินตกเบิก' + (s.backPayNote ? ' (' + App.esc(s.backPayNote) + ')' : '') + '</td><td class="amt">' + App.money(s.backPay) + '</td></tr>' : '') +
+            '<tr class="sum"><td>รวมรับ</td><td class="amt">' + App.money(s.grossPay) + '</td></tr>' +
+          '</table></div>' +
+          '<div class="payslip-box"><h4>รายจ่าย</h4><table>' +
+            (s.ssoEmployee ? '<tr><td>ประกันสังคม 5%</td><td class="amt">' + App.money(s.ssoEmployee) + '</td></tr>' : '') +
+            otherRows +
+            (!s.ssoEmployee && !otherRows ? '<tr><td class="text-gray-400">— ไม่มีรายการหัก —</td><td></td></tr>' : '') +
+            '<tr class="sum"><td>รวมหัก</td><td class="amt">' + App.money(s.totalDeduction) + '</td></tr>' +
+          '</table></div>' +
+        '</div>' +
+        '<div class="payslip-net">' +
+          '<div class="amount">' + App.money(s.netPay) + ' บาท</div>' +
+          '<div class="text">(' + App.esc(s.netPayText) + ')</div>' +
+        '</div>' +
+        '<div class="payslip-footer">' +
+          '<div>ลงชื่อผู้รับเงิน .................................................</div>' +
+          '<div>พิมพ์จากระบบเมื่อ ' + new Date().toLocaleDateString('th-TH') + '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  };
+
+  /** แสดงหน้าพิมพ์สลิปเต็มหน้าจอ (แทนที่ #app-root) รองรับหลายใบต่อครั้ง */
+  App.showPrintView = function (slips, title, backHash) {
+    App.setPrintPageStyle('@page { size: A5 landscape; margin: 6mm; }');
+    var root = document.getElementById('app-root');
+    root.innerHTML =
+      '<div class="max-w-5xl mx-auto p-4">' +
+        '<div class="no-print flex items-center justify-between mb-4">' +
+          '<h2 class="text-lg font-bold">' + App.esc(title || 'พิมพ์สลิปเงินเดือน') + '</h2>' +
+          '<div class="flex gap-2">' +
+            '<button id="btn-back" class="btn btn-secondary">กลับ</button>' +
+            '<button id="btn-print" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="print-area">' + slips.map(App.renderPayslip).join('') + '</div>' +
+      '</div>';
+    document.getElementById('btn-print').onclick = function () { window.print(); };
+    document.getElementById('btn-back').onclick = function () { App.router.go(backHash || '/'); };
+  };
+</script>

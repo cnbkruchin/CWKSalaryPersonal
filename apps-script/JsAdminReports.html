@@ -1,0 +1,126 @@
+<script>
+  App.views.adminReports = function (root) {
+    root.innerHTML = App.adminShell('reports',
+      '<div class="p-6">' +
+        '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
+          '<h1 class="text-xl font-bold">รายงาน / เอกสารขออนุมัติ</h1>' +
+          '<div class="flex items-center gap-2">' +
+            '<select id="month-select" class="input"></select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="flex gap-2 mb-4 no-print">' +
+          '<button id="tab-memo" class="btn btn-primary">บันทึกข้อความขออนุมัติ</button>' +
+          '<button id="tab-bank" class="btn btn-secondary">ใบโอนเงินธนาคาร</button>' +
+        '</div>' +
+        '<div id="report-body"></div>' +
+      '</div>'
+    );
+
+    var monthSelect = document.getElementById('month-select');
+    var currentTab = 'memo';
+
+    App.call('listPayrollMonths').then(function (months) {
+      if (!months.length) {
+        document.getElementById('report-body').innerHTML = '<div class="card p-6 text-gray-400">ยังไม่มีรอบจ่ายเงินเดือนในระบบ</div>';
+        return;
+      }
+      monthSelect.innerHTML = months.map(function (m) {
+        return '<option value="' + m.month + '">' + App.esc(m.monthLabel) + ' (' + (m.status === 'approved' ? 'อนุมัติแล้ว' : 'แบบร่าง') + ')</option>';
+      }).join('');
+      monthSelect.onchange = renderTab;
+      renderTab();
+    }).catch(function (err) { App.toast(err.message, 'error'); });
+
+    document.getElementById('tab-memo').onclick = function () { currentTab = 'memo'; setActiveTab(); renderTab(); };
+    document.getElementById('tab-bank').onclick = function () { currentTab = 'bank'; setActiveTab(); renderTab(); };
+
+    function setActiveTab() {
+      document.getElementById('tab-memo').className = 'btn ' + (currentTab === 'memo' ? 'btn-primary' : 'btn-secondary');
+      document.getElementById('tab-bank').className = 'btn ' + (currentTab === 'bank' ? 'btn-primary' : 'btn-secondary');
+    }
+
+    function renderTab() {
+      if (!monthSelect.value) return;
+      if (currentTab === 'memo') renderMemo(monthSelect.value); else renderBankList(monthSelect.value);
+    }
+
+    function renderMemo(month) {
+      document.getElementById('report-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('getApprovalMemo', month).then(function (memo) {
+        var s = memo.signers;
+        document.getElementById('report-body').innerHTML =
+          '<div class="no-print mb-3"><button id="btn-print-memo" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button></div>' +
+          '<div id="print-area">' +
+          '<div class="card p-10 leading-relaxed text-[15px]" style="max-width:210mm;margin:0 auto;font-family:Sarabun,sans-serif">' +
+            '<div class="text-center font-bold text-lg mb-4">บันทึกข้อความ</div>' +
+            '<div>ส่วนราชการ &nbsp; ' + App.esc(memo.schoolName) + ' ' + App.esc(memo.schoolAddress) + '</div>' +
+            '<div class="flex justify-between"><span>ที่ ....................../..........</span><span>วันที่ ................ เดือน .................... พ.ศ. ....................</span></div>' +
+            '<div class="mt-2"><b>เรื่อง</b> &nbsp; ขออนุมัติเงินค่าจ้างลูกจ้างชั่วคราว และเงินประกันสังคมสมทบ ประจำเดือน' + App.esc(memo.monthLabel) + '</div>' +
+            '<div><b>เรียน</b> &nbsp; ผู้อำนวยการ' + App.esc(memo.schoolName) + '</div>' +
+            '<p class="mt-3 indent-8">ด้วยฝ่ายการเงิน แจ้งความประสงค์ขอเบิกเงินเพื่อใช้ในการดำเนินการจ่ายเงินเดือนบุคลากร' + App.esc(memo.schoolName) + ' ประจำเดือน' + App.esc(memo.monthLabel) + ' มีรายการดังต่อไปนี้</p>' +
+            '<table class="w-full mt-3 border border-gray-800" style="border-collapse:collapse">' +
+              '<thead><tr class="border border-gray-800">' +
+                ['ที่', 'รายการ', 'จำนวนเงิน (บาท)', 'หมายเหตุ'].map(function (h) { return '<th class="border border-gray-800 p-2">' + h + '</th>'; }).join('') +
+              '</tr></thead><tbody>' +
+              memo.lines.map(function (l) {
+                return '<tr class="border border-gray-800">' +
+                  '<td class="border border-gray-800 p-2 text-center">' + l.no + '.</td>' +
+                  '<td class="border border-gray-800 p-2">' + App.esc(l.description) + '</td>' +
+                  '<td class="border border-gray-800 p-2 text-right">' + App.money(l.amount) + '</td>' +
+                  '<td class="border border-gray-800 p-2">' + App.esc(l.note) + '</td></tr>';
+              }).join('') +
+              '<tr class="border border-gray-800 font-bold"><td class="border border-gray-800 p-2 text-center" colspan="2">รวมทั้งหมด</td>' +
+              '<td class="border border-gray-800 p-2 text-right">' + App.money(memo.grandTotal) + '</td><td class="border border-gray-800 p-2"></td></tr>' +
+              '<tr class="border border-gray-800"><td class="border border-gray-800 p-2 text-center" colspan="4">ตัวหนังสือ &nbsp; ( ' + App.esc(memo.grandTotalText) + ' )</td></tr>' +
+              '</tbody></table>' +
+            '<p class="mt-4">จึงเรียนมาเพื่อทราบ</p>' +
+            '<div class="mt-10 text-center">ลงชื่อ..........................................................<br>' +
+              '( ' + App.esc(s.financeOfficerName || '.............................') + ' )<br>' + App.esc(s.financeOfficerTitle) + '</div>' +
+            '<hr class="my-6">' +
+            '<div class="font-bold mb-2">ความเห็นเพิ่มเติม</div>' +
+            signBlock(s.budgetHeadName, s.budgetHeadTitle) +
+            signBlock(s.deputyDirectorName, s.deputyDirectorTitle) +
+            signBlock(s.directorName, s.directorTitle) +
+          '</div></div>';
+        document.getElementById('btn-print-memo').onclick = function () {
+          App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
+          window.print();
+        };
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function signBlock(name, title) {
+      return '<div class="mt-4 text-sm">' +
+        '&#9744; ทราบ &nbsp;&nbsp; &#9744; พิจารณาแล้ว [ &nbsp; ] เห็นควรพิจารณาอนุมัติจ่ายเงินตามแผน' +
+        '<div class="text-center mt-6">ลงชื่อ..........................................................<br>' +
+        '( ' + App.esc(name || '.............................') + ' )<br>ตำแหน่ง ' + App.esc(title) + '</div></div>';
+    }
+
+    function renderBankList(month) {
+      document.getElementById('report-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('getBankTransferList', month).then(function (r) {
+        document.getElementById('report-body').innerHTML =
+          '<div class="no-print mb-3"><button id="btn-print-bank" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button></div>' +
+          '<div id="print-area">' +
+          '<div class="card p-8" style="max-width:210mm;margin:0 auto;font-family:Sarabun,sans-serif">' +
+            '<div class="text-center font-bold mb-4">การจ่ายเงินเดือนอัตราจ้างชั่วคราว ' + App.esc(r.schoolName) + ' เดือน' + App.esc(r.monthLabel) + '</div>' +
+            '<table class="w-full border border-gray-800" style="border-collapse:collapse">' +
+              '<thead><tr>' + ['ลำดับ', 'ชื่อ-สกุล', 'เลขที่บัญชี', 'จำนวนเงิน'].map(function (h) { return '<th class="border border-gray-800 p-2">' + h + '</th>'; }).join('') + '</tr></thead>' +
+              '<tbody>' + r.list.map(function (x, i) {
+                return '<tr><td class="border border-gray-800 p-2 text-center">' + (i + 1) + '</td>' +
+                  '<td class="border border-gray-800 p-2">' + App.esc(x.fullName) + '</td>' +
+                  '<td class="border border-gray-800 p-2 font-mono">' + App.esc(x.bankName) + ' ' + App.esc(x.bankAccountNo) + '</td>' +
+                  '<td class="border border-gray-800 p-2 text-right">' + App.money(x.netPay) + '</td></tr>';
+              }).join('') +
+              '<tr class="font-bold"><td class="border border-gray-800 p-2 text-center" colspan="3">รวม</td><td class="border border-gray-800 p-2 text-right">' + App.money(r.total) + '</td></tr>' +
+              '</tbody></table>' +
+            '<p class="mt-2 text-sm">(' + App.esc(r.totalText) + ')</p>' +
+          '</div></div>';
+        document.getElementById('btn-print-bank').onclick = function () {
+          App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
+          window.print();
+        };
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+  };
+</script>

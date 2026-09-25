@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <?!= include('Styles'); ?>
+</head>
+<body class="min-h-screen">
+  <div id="toast-wrap"></div>
+  <div id="modal-root"></div>
+  <div id="app-root" class="min-h-screen"></div>
+
+  <?!= include('JsApi'); ?>
+  <?!= include('JsPayslip'); ?>
+  <?!= include('JsAuth'); ?>
+  <?!= include('JsAdminEmployees'); ?>
+  <?!= include('JsAdminSalary'); ?>
+  <?!= include('JsAdminPayroll'); ?>
+  <?!= include('JsAdminReports'); ?>
+  <?!= include('JsAdminSettings'); ?>
+  <?!= include('JsEmployeePortal'); ?>
+  <?!= include('JsMain'); ?>
+</body>
+</html>
