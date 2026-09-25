@@ -54,6 +54,55 @@
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,20,35,.45); display: flex; align-items: center; justify-content: center; z-index: 90; padding: 1rem; }
 
+  :focus-visible { outline: 2px solid #3868f5; outline-offset: 2px; }
+  .btn-ghost { background: transparent; color: #445; }
+  .btn-ghost:hover { background: #eef1f8; }
+  .btn-lg { padding: .8rem 1.3rem; font-size: 1rem; border-radius: 12px; }
+
+  /* ---------- หน้าบ้าน: แป้นกด PIN ---------- */
+  .login-bg { background: radial-gradient(1200px 500px at 50% -10%, #dce7ff 0%, #f4f6fb 60%); }
+  .pin-dots { display: flex; justify-content: center; gap: 14px; margin: 18px 0 8px; }
+  .pin-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #8cb1ff; transition: .12s; }
+  .pin-dot.filled { background: #264ed6; border-color: #264ed6; transform: scale(1.1); }
+  .pin-shake { animation: shake .35s; }
+  @keyframes shake { 20%,60% { transform: translateX(-8px) } 40%,80% { transform: translateX(8px) } }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 280px; margin: 0 auto; }
+  .key { height: 60px; border-radius: 16px; background: #fff; font-size: 1.5rem; font-weight: 600; color: #1a2f6e;
+    box-shadow: 0 1px 2px rgba(20,30,60,.08); border: 1px solid #e3e8f3; transition: .08s; user-select: none; -webkit-tap-highlight-color: transparent; }
+  .key:active { transform: scale(.95); background: #eef4ff; }
+  .key.key-fn { background: transparent; box-shadow: none; border: none; font-size: .95rem; color: #56607a; }
+
+  /* ---------- หน้าบ้าน: แท็บล่าง (มือถือ) ---------- */
+  .tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e3e8f3; display: flex; z-index: 40;
+    padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar button { flex: 1; padding: .55rem 0 .6rem; font-size: .75rem; font-weight: 600; color: #6b7690; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .tabbar button.active { color: #264ed6; }
+  .tabbar svg { width: 22px; height: 22px; }
+  .hero-net { background: linear-gradient(135deg, #1f3fac, #3868f5); color: #fff; border-radius: 20px; }
+  .slip-fit { width: 100%; overflow: hidden; }
+  .slip-fit > .payslip { transform-origin: top left; }
+
+  /* ---------- หลังบ้าน: แถบเมนูแบบพับได้บนมือถือ ---------- */
+  .admin-aside { width: 15rem; }
+  @media (max-width: 900px) {
+    .admin-aside { position: fixed; inset: 0 auto 0 0; z-index: 60; transform: translateX(-100%); transition: transform .2s; box-shadow: 0 0 40px rgba(0,0,0,.2); }
+    .admin-aside.open { transform: none; }
+    .aside-scrim { position: fixed; inset: 0; background: rgba(15,20,35,.35); z-index: 55; }
+  }
+  @media (min-width: 901px) { .menu-toggle, .aside-scrim { display: none; } }
+
+  /* ---------- แดชบอร์ด ---------- */
+  .stat-tile .value { font-size: 1.6rem; font-weight: 700; color: #1a2f6e; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .stat-tile .caption { font-size: .8rem; color: #6b7690; }
+  .chart-tip { position: absolute; pointer-events: none; background: #1a2f6e; color: #fff; font-size: .78rem; padding: .35rem .55rem; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -110%); }
+
+  /* ---------- สลิป: ลายน้ำร่าง + QR ---------- */
+  .payslip { position: relative; }
+  .payslip-watermark { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+    font-size: 6rem; font-weight: 800; color: rgba(179, 38, 30, .10); transform: rotate(-18deg); }
+  .payslip-verify { display: flex; align-items: center; gap: 8px; font-size: .68rem; color: #667; }
+  .payslip-verify svg, .payslip-verify img { width: 64px; height: 64px; }
+
   /* ---------- สลิปเงินเดือน A5 แนวนอน ---------- */
   .payslip {
     width: 210mm; min-height: 148mm; background: #fff; margin: 0 auto 12px;
@@ -80,7 +129,8 @@
   .payslip-net .amount { font-size: 1.4rem; font-weight: 700; color: #1a2f6e; }
   .payslip-net .text { font-size: .8rem; color: #556; }
   .payslip-note { font-size: .78rem; color: #667; margin-top: 8px; }
-  .payslip-footer { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 14px; font-size: .82rem; color: #445; text-align: center; }
+  .payslip-footer { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: auto; padding-top: 12px; font-size: .82rem; color: #445; }
+  .payslip-footer .sign { text-align: center; }
 
   @media print {
     body * { visibility: hidden; }
@@ -88,6 +138,8 @@
     #print-area { position: absolute; left: 0; top: 0; width: 100%; }
     .payslip { border: none; border-radius: 0; box-shadow: none; page-break-after: always; margin: 0 auto; }
     .no-print { display: none !important; }
+    .slip-fit > .payslip { transform: none !important; }
+    #print-area .card { box-shadow: none; padding: 0; }
   }
 </style>
 <style id="page-size-style"></style>

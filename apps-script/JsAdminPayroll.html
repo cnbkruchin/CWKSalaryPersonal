@@ -3,9 +3,9 @@
     var month = (params && params.month) || App.currentMonthKey();
 
     root.innerHTML = App.adminShell('payroll',
-      '<div class="p-6">' +
+      '<div class="p-4 sm:p-6">' +
         '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
-          '<h1 class="text-xl font-bold">รอบจ่ายเงินเดือน</h1>' +
+          '<p class="text-sm text-gray-500">สร้างรอบจ่าย → ตรวจ/แก้ไขรายคน → อนุมัติ (ลูกจ้างจะเห็นสลิปทันทีหลังอนุมัติ)</p>' +
           '<div class="flex items-center gap-2">' +
             '<select id="month-select" class="input"></select>' +
             '<button id="btn-load" class="btn btn-secondary">สร้าง/โหลดรอบจ่าย</button>' +
@@ -39,7 +39,7 @@
       var approved = run.status === 'approved';
       var body = document.getElementById('payroll-body');
       body.innerHTML =
-        '<div class="flex items-center justify-between mb-3">' +
+        '<div class="flex items-center justify-between gap-2 flex-wrap mb-3">' +
           '<div class="flex items-center gap-2">' +
             '<span class="text-lg font-semibold">' + App.esc(run.monthLabel) + '</span>' +
             '<span class="badge ' + (approved ? 'badge-approved' : 'badge-draft') + '">' + (approved ? 'อนุมัติแล้ว' : 'แบบร่าง') + '</span>' +
@@ -69,14 +69,14 @@
             '</tr></tfoot>' +
           '</table>' +
         '</div>' +
-        '<p class="text-xs text-gray-400 mt-2">ตัวเลขรวมเป็นตัวหนังสือ: ' + App.esc(run.totalsText) + '</p>';
+        '<p class="text-xs text-gray-400 mt-2">ยอดโอนสุทธิรวม: ' + App.esc(run.totalsText) + '</p>';
 
       document.getElementById('btn-print-slips').onclick = printAll;
       if (approved) {
         document.getElementById('btn-reopen').onclick = function () {
-          App.confirm('เปิดรอบแก้ไขอีกครั้ง? สลิปที่พนักงานเห็นอยู่จะถูกซ่อนจนกว่าจะอนุมัติใหม่').then(function (ok) {
-            if (!ok) return;
-            App.call('reopenPayrollRun', run.month).then(function () { loadRun(run.month); }).catch(function (err) { App.toast(err.message, 'error'); });
+          App.prompt('เปิดรอบ ' + run.monthLabel + ' เพื่อแก้ไข? สลิปที่ลูกจ้างเห็นอยู่จะถูกซ่อนจนกว่าจะอนุมัติใหม่ กรุณาระบุเหตุผล (บันทึกในประวัติการใช้งาน)', 'เช่น แก้ไขค่าขึ้นเวรของ Cwk005', 'เปิดรอบแก้ไข').then(function (reason) {
+            if (!reason) return;
+            App.call('reopenPayrollRun', run.month, reason).then(function () { loadRun(run.month); }).catch(function (err) { App.toast(err.message, 'error'); });
           });
         };
       } else {
@@ -105,8 +105,8 @@
       var pendingBadge = (l.pendingBackPay && l.pendingBackPay.count > 0)
         ? '<div class="text-xs text-amber-600 mt-0.5">ค้างตกเบิก ' + App.money(l.pendingBackPay.total) + ' บาท</div>' : '';
       var extraIncome = l.positionAllowance + l.onDutyPay + l.otherIncome;
-      return '<tr>' +
-        '<td>' + App.esc(l.fullName) + pendingBadge + '</td>' +
+      return '<tr' + (l.netPay < 0 ? ' class="bg-red-50"' : '') + '>' +
+        '<td><div class="text-xs text-gray-400 font-mono">' + App.esc(l.employeeId) + '</div>' + App.esc(l.fullName) + pendingBadge + '</td>' +
         '<td class="text-right">' + App.money(l.baseSalary) + '</td>' +
         '<td class="text-right">' + App.money(extraIncome) + '</td>' +
         '<td class="text-right">' + App.money(l.backPay) + '</td>' +
@@ -121,7 +121,7 @@
 
     function printAll() {
       App.call('getPayslipsForPrint', currentRun.month).then(function (slips) {
-        App.showPrintView(slips, 'พิมพ์สลิปเงินเดือน — ' + currentRun.monthLabel, '#/admin/payroll?month=' + currentRun.month);
+        App.showPrintView(slips, 'พิมพ์สลิปเงินเดือน — ' + currentRun.monthLabel, '/admin/payroll?month=' + currentRun.month);
       }).catch(function (err) { App.toast(err.message, 'error'); });
     }
 

@@ -1,0 +1,41 @@
+<script>
+  /** หลังบ้าน: ประวัติการใช้งาน (Audit trail) — ใคร ทำอะไร กับข้อมูลใด เมื่อไร */
+  App.views.adminAudit = function (root) {
+    root.innerHTML = App.adminShell('audit',
+      '<div class="p-4 sm:p-6">' +
+        '<div class="flex items-center justify-between flex-wrap gap-3 mb-4">' +
+          '<p class="text-sm text-gray-500 max-w-xl">บันทึกทุกการเข้าสู่ระบบและการแก้ไขข้อมูลเงินเดือนโดยอัตโนมัติ แก้ไขหรือลบไม่ได้จากหน้าเว็บ ใช้ตรวจสอบย้อนหลังตามหลักการควบคุมภายใน</p>' +
+          '<form id="audit-search" class="flex gap-2">' +
+            '<input id="audit-q" class="input" placeholder="ค้นหา เช่น Cwk005, อนุมัติ, 2026-09">' +
+            '<button class="btn btn-secondary" type="submit">ค้นหา</button>' +
+            '<button class="btn btn-secondary" type="button" id="audit-csv">CSV</button>' +
+          '</form>' +
+        '</div>' +
+        '<div id="audit-body" class="card overflow-x-auto"><p class="text-gray-400 p-6">กำลังโหลด...</p></div>' +
+      '</div>');
+
+    var current = [];
+    document.getElementById('audit-search').onsubmit = function (ev) { ev.preventDefault(); load(document.getElementById('audit-q').value); };
+    document.getElementById('audit-csv').onclick = function () {
+      App.downloadText('audit-log-' + App.currentMonthKey() + '.csv', App.csv([['เวลา', 'ผู้ใช้', 'สิทธิ์', 'การกระทำ', 'เป้าหมาย', 'รายละเอียด']].concat(
+        current.map(function (r) { return [r.timestamp, r.actorId, r.role, r.actionLabel, r.target, r.detail]; }))));
+    };
+    load('');
+
+    function load(q) {
+      App.call('listAuditLog', q, 300).then(function (rows) {
+        current = rows;
+        var body = document.getElementById('audit-body');
+        if (!rows.length) { body.innerHTML = '<p class="text-gray-400 p-6">ไม่พบรายการ</p>'; return; }
+        body.innerHTML = '<table class="table-clean w-full"><thead><tr><th>เวลา</th><th>ผู้ใช้</th><th>การกระทำ</th><th>เป้าหมาย</th><th>รายละเอียด</th></tr></thead><tbody>' +
+          rows.map(function (r) {
+            var warn = /FAILED|DENIED|REOPEN|RESET/.test(r.action);
+            return '<tr' + (warn ? ' class="bg-amber-50"' : '') + '><td class="whitespace-nowrap text-xs text-gray-500">' + App.esc(App.dateTime(r.timestamp)) + '</td>' +
+              '<td class="font-mono text-xs">' + App.esc(r.actorId) + (r.role ? ' <span class="text-gray-400">(' + App.esc(r.role) + ')</span>' : '') + '</td>' +
+              '<td>' + App.esc(r.actionLabel) + '</td><td class="text-sm">' + App.esc(r.target) + '</td>' +
+              '<td class="text-xs text-gray-500 max-w-xs break-words">' + App.esc(r.detail) + '</td></tr>';
+          }).join('') + '</tbody></table>';
+      }).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+  };
+</script>

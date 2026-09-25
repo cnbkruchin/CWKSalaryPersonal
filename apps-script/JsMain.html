@@ -1,78 +1,107 @@
 <script>
-  // ---------------- Shell / Layout ----------------
+  // ---------------- หลังบ้าน: โครงหน้า (เมนูด้านข้าง พับได้บนมือถือ) ----------------
 
   var NAV_ITEMS = [
+    { key: 'dashboard', path: '/admin/dashboard', label: 'ภาพรวม' },
     { key: 'payroll', path: '/admin/payroll', label: 'รอบจ่ายเงินเดือน' },
     { key: 'salary', path: '/admin/salary', label: 'เลื่อนขั้น / ตกเบิก' },
     { key: 'employees', path: '/admin/employees', label: 'ทะเบียนลูกจ้าง' },
-    { key: 'reports', path: '/admin/reports', label: 'รายงาน/เอกสาร' },
+    { key: 'reports', path: '/admin/reports', label: 'รายงาน / เอกสาร' },
+    { key: 'audit', path: '/admin/audit', label: 'ประวัติการใช้งาน' },
     { key: 'settings', path: '/admin/settings', label: 'ตั้งค่าระบบ' }
   ];
 
-  App.topbar = function (title, name) {
-    return (
-      '<div class="no-print flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">' +
-        '<div class="font-bold text-brand-900">' + App.esc(title) + '</div>' +
-        '<div class="flex items-center gap-3 text-sm">' +
-          '<span class="text-gray-500">' + App.esc(name || '') + '</span>' +
-          '<button id="btn-change-pin" class="btn btn-secondary !px-3 !py-1.5">เปลี่ยนรหัสผ่าน</button>' +
-          '<button id="btn-logout" class="btn btn-danger !px-3 !py-1.5">ออกจากระบบ</button>' +
-        '</div>' +
-      '</div>'
-    );
-  };
-
-  App.bindTopbarActions = function () {
-    var pinBtn = document.getElementById('btn-change-pin');
-    var outBtn = document.getElementById('btn-logout');
-    if (pinBtn) pinBtn.onclick = function () { App.showChangePinModal(false); };
-    if (outBtn) outBtn.onclick = function () {
-      App.call('logout').catch(function () {}).then(function () {
-        App.session.clear();
-        App.router.go('/login');
-      });
-    };
-  };
-
   App.adminShell = function (activeKey, innerHtml) {
-    var session = App.session.get();
+    var session = App.session.get() || {};
+    var current = NAV_ITEMS.filter(function (i) { return i.key === activeKey; })[0];
     return (
       '<div class="min-h-screen flex">' +
-        '<aside class="no-print w-60 bg-white border-r border-gray-200 flex flex-col">' +
+        '<aside id="admin-aside" class="admin-aside no-print bg-white border-r border-gray-200 flex flex-col flex-shrink-0">' +
           '<div class="px-5 py-5 border-b border-gray-100 flex items-center gap-3">' +
-            '<img src="' + App.SCHOOL_LOGO + '" alt="ตราโรงเรียน" class="h-10 w-auto flex-shrink-0">' +
+            '<img src="' + App.SCHOOL_LOGO + '" alt="" class="h-10 w-auto flex-shrink-0">' +
             '<div><div class="font-bold text-brand-900 leading-tight text-sm">ระบบเงินเดือนลูกจ้าง</div>' +
-            '<div class="text-xs text-gray-400">โรงเรียนจุนวิทยาคม</div></div>' +
+            '<div class="text-xs text-gray-400">หลังบ้าน (เจ้าหน้าที่)</div></div>' +
           '</div>' +
-          '<nav class="flex-1 p-3 space-y-1">' +
+          '<nav class="flex-1 p-3 space-y-1" aria-label="เมนูหลัก">' +
             NAV_ITEMS.map(function (item) {
-              return '<a href="#' + item.path + '" class="nav-link ' + (item.key === activeKey ? 'active' : '') + '">' + item.label + '</a>';
+              return '<a href="#' + item.path + '" class="nav-link ' + (item.key === activeKey ? 'active' : '') + '"' +
+                (item.key === activeKey ? ' aria-current="page"' : '') + '>' + item.label + '</a>';
             }).join('') +
           '</nav>' +
+          '<div class="p-3 border-t border-gray-100 text-xs text-gray-500">' +
+            '<div class="px-2 mb-2 truncate">' + App.esc(session.fullName || '') + '</div>' +
+            '<button id="btn-change-pin" class="nav-link w-full"><span class="w-4 h-4">' + App.icon('key') + '</span>เปลี่ยนรหัสผ่าน</button>' +
+            '<button id="btn-logout" class="nav-link w-full text-red-700"><span class="w-4 h-4">' + App.icon('logout') + '</span>ออกจากระบบ</button>' +
+          '</div>' +
         '</aside>' +
+        '<div id="aside-scrim" class="aside-scrim hidden"></div>' +
         '<div class="flex-1 min-w-0">' +
-          App.topbar(NAV_ITEMS.filter(function (i) { return i.key === activeKey; }).map(function (i) { return i.label; })[0] || '', session ? session.fullName : '') +
+          '<div class="no-print flex items-center gap-2 px-4 sm:px-6 py-3 bg-white border-b border-gray-200 sticky top-0 z-30">' +
+            '<button id="menu-toggle" class="menu-toggle btn btn-ghost !px-2" aria-label="เปิดเมนู"><span class="w-6 h-6">' + App.icon('menu') + '</span></button>' +
+            '<div class="font-bold text-brand-900">' + App.esc(current ? current.label : '') + '</div>' +
+          '</div>' +
           '<div>' + innerHtml + '</div>' +
         '</div>' +
       '</div>'
     );
   };
 
-  // ---------------- Router ----------------
+  /** ผูกปุ่มในโครงหน้าหลังบ้าน — router เรียกให้อัตโนมัติหลัง render ทุกหน้า */
+  App.bindAdminShell = function () {
+    var aside = document.getElementById('admin-aside');
+    if (!aside) return;
+    var scrim = document.getElementById('aside-scrim');
+    var setOpen = function (open) { aside.classList.toggle('open', open); scrim.classList.toggle('hidden', !open); };
+    document.getElementById('menu-toggle').onclick = function () { setOpen(true); };
+    scrim.onclick = function () { setOpen(false); };
+    document.getElementById('btn-change-pin').onclick = function () { App.showChangePinModal(false); };
+    document.getElementById('btn-logout').onclick = function () { App.logout(); };
+  };
 
+  // ---------------- แป้นพิมพ์ (ใช้กับแป้น PIN) ----------------
+  var keyHandler = null;
+  App.setKeyHandler = function (fn) { keyHandler = fn; };
+  document.addEventListener('keydown', function (ev) {
+    if (keyHandler && !document.getElementById('modal-root').innerHTML) keyHandler(ev);
+  });
+
+  // ---------------- ออกจากระบบอัตโนมัติเมื่อไม่มีการใช้งาน 15 นาที ----------------
+  var IDLE_MS = 15 * 60 * 1000;
+  var idleTimer = null;
+  function resetIdle() {
+    clearTimeout(idleTimer);
+    if (!App.session.get()) return;
+    idleTimer = setTimeout(function () {
+      if (!App.session.get()) return;
+      App.logout(true);
+      App.toast('ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งาน 15 นาที', 'info');
+    }, IDLE_MS);
+  }
+  ['click', 'keydown', 'touchstart', 'scroll'].forEach(function (ev) {
+    document.addEventListener(ev, resetIdle, { passive: true });
+  });
+
+  // ---------------- Router: 3 ทางเข้าแยกกันด้วย ?page=admin / ?verify= ----------------
   App.router = (function () {
-    var routes = {
-      '/login': { view: App.views.login, mode: 'public' },
-      '/admin/employees': { view: App.views.adminEmployees, mode: 'admin' },
-      '/admin/salary': { view: App.views.adminSalary, mode: 'admin' },
-      '/admin/payroll': { view: App.views.adminPayroll, mode: 'admin' },
-      '/admin/reports': { view: App.views.adminReports, mode: 'admin' },
-      '/admin/settings': { view: App.views.adminSettings, mode: 'admin' },
-      '/me': { view: App.views.employeePortal, mode: 'auth' }
+    var ROUTES = {
+      employee: {
+        '/login': { view: App.views.employeeLogin, auth: false },
+        '/me': { view: App.views.employeePortal, auth: true }
+      },
+      admin: {
+        '/login': { view: App.views.adminLogin, auth: false },
+        '/admin/dashboard': { view: App.views.adminDashboard, auth: true },
+        '/admin/payroll': { view: App.views.adminPayroll, auth: true },
+        '/admin/salary': { view: App.views.adminSalary, auth: true },
+        '/admin/employees': { view: App.views.adminEmployees, auth: true },
+        '/admin/reports': { view: App.views.adminReports, auth: true },
+        '/admin/audit': { view: App.views.adminAudit, auth: true },
+        '/admin/settings': { view: App.views.adminSettings, auth: true }
+      }
     };
 
     function parseHash() {
-      var raw = location.hash.replace(/^#/, '') || '';
+      var raw = location.hash.replace(/^#+/, '') || '';
       var qIndex = raw.indexOf('?');
       var path = qIndex === -1 ? raw : raw.substring(0, qIndex);
       var params = {};
@@ -86,41 +115,51 @@
       return { path: path, params: params };
     }
 
-    function homeFor(session) {
-      if (!session) return '/login';
-      return session.role === 'admin' ? '/admin/payroll' : '/me';
+    function home() {
+      if (!App.session.get()) return '/login';
+      return App.config.mode === 'admin' ? '/admin/dashboard' : '/me';
     }
 
-    function go(path) { location.hash = '#' + path; }
+    /** เปลี่ยนหน้า — ถ้าเป็น hash เดิม (เช่น กดกลับจากหน้าพิมพ์) จะ render ใหม่ให้เอง */
+    function go(path) {
+      var target = '#' + String(path).replace(/^#+/, '');
+      if (location.hash === target) render();
+      else location.hash = target;
+    }
 
     function render() {
+      App.setKeyHandler(null);
+      App.closeModal();
+      var root = document.getElementById('app-root');
+      if (App.config.mode === 'verify') { App.views.verify(root); return; }
+
       var session = App.session.get();
       var parsed = parseHash();
-      var path = parsed.path;
+      var route = ROUTES[App.config.mode][parsed.path];
+      if (!route) { go(home()); return; }
+      if (route.auth && !session) { go('/login'); return; }
+      if (!route.auth && session) { go(home()); return; }
 
-      if (!path) { go(homeFor(session)); return; }
-
-      var route = routes[path];
-      if (!route) { go(homeFor(session)); return; }
-
-      if (route.mode === 'admin' && (!session || session.role !== 'admin')) { go(session ? homeFor(session) : '/login'); return; }
-      if (route.mode === 'auth' && !session) { go('/login'); return; }
-      if (route.mode === 'public' && session) { go(homeFor(session)); return; }
-
-      var root = document.getElementById('app-root');
       route.view(root, parsed.params);
+      App.bindAdminShell();
+      resetIdle();
     }
 
     window.addEventListener('hashchange', render);
-    return { go: go, render: render };
+    return { go: go, render: render, home: home };
   })();
 
   window.addEventListener('DOMContentLoaded', function () {
     var session = App.session.get();
-    if (!session) { App.router.render(); return; }
+    if (!session || App.config.mode === 'verify') { App.router.render(); return; }
     App.api('whoAmI', session.token).then(function (info) {
-      App.session.set(Object.assign({}, session, { fullName: info.fullName, role: info.role }));
-      App.router.render();
+      if (info.role !== session.role) throw new Error('role mismatch');
+      App.session.set(Object.assign({}, session, info));
+      if (info.needsPdpa || info.mustChangePin) {
+        App.afterLogin(info);
+      } else {
+        App.router.render();
+      }
     }).catch(function () {
       App.session.clear();
       App.router.render();

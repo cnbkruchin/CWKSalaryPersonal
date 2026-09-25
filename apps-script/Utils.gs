@@ -45,30 +45,6 @@ function compareMonthKey(a, b) {
   return a < b ? -1 : (a > b ? 1 : 0);
 }
 
-/** บวก/ลบจำนวนเดือนจาก YYYY-MM คืนค่า YYYY-MM ใหม่ */
-function addMonths(monthKey, delta) {
-  var parts = monthKey.split('-');
-  var y = parseInt(parts[0], 10);
-  var m = parseInt(parts[1], 10) - 1;
-  var d = new Date(Date.UTC(y, m + delta, 1));
-  var yy = d.getUTCFullYear();
-  var mm = d.getUTCMonth() + 1;
-  return yy + '-' + (mm < 10 ? '0' + mm : '' + mm);
-}
-
-/** รายการเดือนทั้งหมดตั้งแต่ from ถึง to (รวมปลายทาง) */
-function monthRange(fromMonth, toMonth) {
-  var out = [];
-  var cur = fromMonth;
-  var guard = 0;
-  while (compareMonthKey(cur, toMonth) <= 0 && guard < 600) {
-    out.push(cur);
-    cur = addMonths(cur, 1);
-    guard++;
-  }
-  return out;
-}
-
 function nowIso() {
   return new Date().toISOString();
 }
@@ -148,4 +124,29 @@ function bahtText(amount) {
   }
   if (negative) text = 'ลบ' + text;
   return text;
+}
+
+/** ปิดบังข้อมูลส่วนบุคคลให้เห็นเฉพาะ 4 ตัวท้าย (หลักการใช้ข้อมูลเท่าที่จำเป็นตาม PDPA) */
+function maskTail_(value, visible) {
+  var s = String(value || '').replace(/\s|-/g, '');
+  if (!s) return '';
+  visible = visible || 4;
+  if (s.length <= visible) return s;
+  return new Array(s.length - visible + 1).join('•') + s.slice(-visible);
+}
+
+/** ตรวจเลขประจำตัวประชาชนไทย 13 หลักด้วย check digit มาตรฐานกรมการปกครอง */
+function isValidThaiCitizenId_(id) {
+  if (!/^\d{13}$/.test(id)) return false;
+  var sum = 0;
+  for (var i = 0; i < 12; i++) sum += parseInt(id.charAt(i), 10) * (13 - i);
+  return (11 - (sum % 11)) % 10 === parseInt(id.charAt(12), 10);
+}
+
+/** วันที่ ISO/yyyy-MM-dd -> "25 ก.ย. 2569" */
+function formatThaiDateShort(value) {
+  if (!value) return '';
+  var m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(value);
+  return parseInt(m[3], 10) + ' ' + THAI_MONTH_ABBR[parseInt(m[2], 10) - 1] + ' ' + (parseInt(m[1], 10) + 543);
 }

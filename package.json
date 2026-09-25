@@ -1,0 +1,13 @@
+{
+  "name": "cwk-salary-personal",
+  "version": "2.0.0",
+  "private": true,
+  "description": "ระบบเงินเดือนลูกจ้างชั่วคราว โรงเรียนจุนวิทยาคม (Google Apps Script + Google Sheets)",
+  "scripts": {
+    "test": "node dev/test.js",
+    "dev": "node dev/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

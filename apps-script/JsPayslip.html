@@ -50,29 +50,75 @@
         '</div>' +
         (notes.length ? '<div class="payslip-note">*หมายเหตุ ' + notes.map(App.esc).join(' &middot; ') + '</div>' : '') +
         '<div class="payslip-footer">' +
-          '<div>ลงชื่อ.................................................เจ้าหน้าที่การเงิน<br>' +
+          (s.verifyCode
+            ? '<div class="payslip-verify">' + App.qrSvg(s.verifyUrl || s.verifyCode) +
+                '<div>ตรวจสอบความถูกต้องของสลิป<br>สแกน QR หรือใช้รหัส<br><b class="font-mono text-[.72rem] text-gray-700">' + App.esc(s.verifyCode) + '</b>' +
+                (s.paidDateLabel ? '<br>จ่ายเมื่อ ' + App.esc(s.paidDateLabel) : '') + '</div></div>'
+            : '<div class="payslip-verify">เอกสารร่าง — ยังไม่ผ่านการอนุมัติ</div>') +
+          '<div class="sign">ลงชื่อ.................................................' + App.esc(s.financeOfficerTitle || 'เจ้าหน้าที่การเงิน') + '<br>' +
           '(' + App.esc(s.financeOfficerName || '.............................') + ')</div>' +
         '</div>' +
+        (s.status !== 'approved' ? '<div class="payslip-watermark">ร่าง</div>' : '') +
       '</div>'
     );
   };
 
-  /** แสดงหน้าพิมพ์สลิปเต็มหน้าจอ (แทนที่ #app-root) รองรับหลายใบต่อครั้ง */
-  App.showPrintView = function (slips, title, backHash) {
-    App.setPrintPageStyle('@page { size: A5 landscape; margin: 6mm; }');
+  /** QR code เป็น SVG (ใช้ไลบรารี qrcode-generator) — ถ้าโหลดไลบรารีไม่ได้จะแสดงเฉพาะรหัสตัวอักษร */
+  App.qrSvg = function (text) {
+    try {
+      if (typeof qrcode !== 'function') return '';
+      var qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      return qr.createSvgTag({ cellSize: 2, margin: 0, scalable: true });
+    } catch (e) {
+      return '';
+    }
+  };
+
+  /** ย่อสลิปขนาด A5 ให้พอดีความกว้างหน้าจอ (มือถือ) โดยไม่กระทบขนาดตอนพิมพ์ */
+  App.fitSlips = function (container) {
+    var wraps = (container || document).querySelectorAll('.slip-fit');
+    wraps.forEach(function (wrap) {
+      var slip = wrap.firstElementChild;
+      if (!slip) return;
+      slip.style.transform = '';
+      var natural = slip.offsetWidth;
+      var scale = Math.min(1, wrap.clientWidth / natural);
+      slip.style.transform = scale < 1 ? 'scale(' + scale + ')' : '';
+      wrap.style.height = scale < 1 ? (slip.offsetHeight * scale) + 'px' : '';
+    });
+  };
+  window.addEventListener('resize', function () { App.fitSlips(); });
+
+  function printShell(title, backPath, bodyHtml) {
     var root = document.getElementById('app-root');
     root.innerHTML =
       '<div class="max-w-5xl mx-auto p-4">' +
-        '<div class="no-print flex items-center justify-between mb-4">' +
-          '<h2 class="text-lg font-bold">' + App.esc(title || 'พิมพ์สลิปเงินเดือน') + '</h2>' +
+        '<div class="no-print flex items-center justify-between gap-2 mb-4 flex-wrap">' +
+          '<h2 class="text-lg font-bold">' + App.esc(title) + '</h2>' +
           '<div class="flex gap-2">' +
-            '<button id="btn-back" class="btn btn-secondary">กลับ</button>' +
-            '<button id="btn-print" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button>' +
+            '<button id="btn-back" class="btn btn-secondary">← กลับ</button>' +
+            '<button id="btn-print" class="btn btn-primary"><span class="w-4 h-4">' + App.icon('print') + '</span> พิมพ์ / บันทึกเป็น PDF</button>' +
           '</div>' +
         '</div>' +
-        '<div id="print-area">' + slips.map(App.renderPayslip).join('') + '</div>' +
+        '<p class="no-print text-xs text-gray-500 mb-3">เคล็ดลับ: ในหน้าต่างพิมพ์ เลือกปลายทาง "บันทึกเป็น PDF" เพื่อเก็บไฟล์ไว้ในเครื่อง</p>' +
+        '<div id="print-area">' + bodyHtml + '</div>' +
       '</div>';
     document.getElementById('btn-print').onclick = function () { window.print(); };
-    document.getElementById('btn-back').onclick = function () { App.router.go(backHash || '/'); };
+    document.getElementById('btn-back').onclick = function () { App.router.go(backPath || App.router.home()); };
+    window.scrollTo(0, 0);
+  }
+
+  /** แสดงหน้าพิมพ์สลิปเต็มหน้าจอ (แทนที่ #app-root) รองรับหลายใบต่อครั้ง — กระดาษ A5 แนวนอน */
+  App.showPrintView = function (slips, title, backPath) {
+    App.setPrintPageStyle('@page { size: A5 landscape; margin: 6mm; }');
+    printShell(title || 'พิมพ์สลิปเงินเดือน', backPath, slips.map(App.renderPayslip).join(''));
+  };
+
+  /** แสดงเอกสารทั่วไปสำหรับพิมพ์ — กระดาษ A4 แนวตั้ง */
+  App.showDocPrint = function (html, title, backPath) {
+    App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
+    printShell(title, backPath, '<div class="card p-8 bg-white">' + html + '</div>');
   };
 </script>

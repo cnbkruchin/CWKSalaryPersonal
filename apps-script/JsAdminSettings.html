@@ -1,6 +1,6 @@
 <script>
   App.views.adminSettings = function (root) {
-    root.innerHTML = App.adminShell('settings', '<div class="p-6 max-w-3xl"><p class="text-gray-400">กำลังโหลด...</p></div>');
+    root.innerHTML = App.adminShell('settings', '<div id="settings-body" class="p-4 sm:p-6 max-w-3xl"><p class="text-gray-400">กำลังโหลด...</p></div>');
     App.call('getSettingsForClient').then(renderForm).catch(function (err) { App.toast(err.message, 'error'); });
 
     function field(key, label, settings, type) {
@@ -8,9 +8,9 @@
     }
 
     function renderForm(settings) {
-      var body = document.querySelector('#app-root .p-6');
+      var body = document.getElementById('settings-body');
       body.innerHTML =
-        '<h1 class="text-xl font-bold mb-4">ตั้งค่าระบบ</h1>' +
+        
         '<form id="settings-form" class="card p-6 space-y-6">' +
           '<div><h2 class="font-semibold mb-3">ข้อมูลโรงเรียน</h2><div class="grid grid-cols-2 gap-3">' +
             field('SchoolName', 'ชื่อโรงเรียน', settings) +
@@ -32,7 +32,8 @@
           '</div></div>' +
 
           '<div><h2 class="font-semibold mb-3">ระบบ</h2><div class="grid grid-cols-2 gap-3">' +
-            field('SessionTimeoutMinutes', 'หมดเวลาเซสชันอัตโนมัติ (นาที)', settings, 'number') +
+            field('SessionTimeoutMinutes', 'อายุเซสชันหลังบ้าน (นาที)', settings, 'number') +
+            field('DataControllerContact', 'ช่องทางติดต่อเรื่องข้อมูลส่วนบุคคล (แสดงในประกาศ PDPA)', settings) +
           '</div></div>' +
 
           '<div class="flex justify-end"><button type="submit" class="btn btn-primary">บันทึกการตั้งค่า</button></div>' +
@@ -42,7 +43,7 @@
         ev.preventDefault();
         var keys = ['SchoolName', 'SchoolAddress', 'SchoolDistrictOffice', 'SSORate', 'SSOWageCap', 'CompFundRate',
           'FinanceOfficerName', 'FinanceOfficerTitle', 'BudgetHeadName', 'BudgetHeadTitle',
-          'DeputyDirectorName', 'DeputyDirectorTitle', 'DirectorName', 'DirectorTitle', 'SessionTimeoutMinutes'];
+          'DeputyDirectorName', 'DeputyDirectorTitle', 'DirectorName', 'DirectorTitle', 'SessionTimeoutMinutes', 'DataControllerContact'];
         var patch = {};
         keys.forEach(function (k) { patch[k] = document.getElementById('s-' + k).value; });
         App.call('updateSettings', patch).then(function () {

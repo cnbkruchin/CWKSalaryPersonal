@@ -1,7 +1,7 @@
 <script>
   App.views.adminReports = function (root) {
     root.innerHTML = App.adminShell('reports',
-      '<div class="p-6">' +
+      '<div class="p-4 sm:p-6">' +
         '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
           '<h1 class="text-xl font-bold">รายงาน / เอกสารขออนุมัติ</h1>' +
           '<div class="flex items-center gap-2">' +
@@ -100,7 +100,9 @@
       document.getElementById('report-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
       App.call('getBankTransferList', month).then(function (r) {
         document.getElementById('report-body').innerHTML =
-          '<div class="no-print mb-3"><button id="btn-print-bank" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button></div>' +
+          (r.approved ? '' : '<div class="no-print mb-3 rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3">รอบจ่ายเดือนนี้ยังเป็นแบบร่าง — ตัวเลขอาจเปลี่ยน ควรอนุมัติก่อนส่งธนาคาร</div>') +
+          '<div class="no-print mb-3 flex gap-2 flex-wrap"><button id="btn-print-bank" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button>' +
+          '<button id="btn-csv-bank" class="btn btn-secondary">ดาวน์โหลด CSV (Excel)</button></div>' +
           '<div id="print-area">' +
           '<div class="card p-8" style="max-width:210mm;margin:0 auto;font-family:Sarabun,sans-serif">' +
             '<div class="text-center font-bold mb-4">การจ่ายเงินเดือนอัตราจ้างชั่วคราว ' + App.esc(r.schoolName) + ' เดือน' + App.esc(r.monthLabel) + '</div>' +
@@ -116,6 +118,13 @@
               '</tbody></table>' +
             '<p class="mt-2 text-sm">(' + App.esc(r.totalText) + ')</p>' +
           '</div></div>';
+        document.getElementById('btn-csv-bank').onclick = function () {
+          var rows = [['ลำดับ', 'รหัสพนักงาน', 'ชื่อ-สกุล', 'ธนาคาร', 'เลขที่บัญชี', 'จำนวนเงิน']].concat(r.list.map(function (x, i) {
+            return [i + 1, x.employeeId, x.fullName, x.bankName, '="' + x.bankAccountNo + '"', x.netPay.toFixed(2)];
+          }));
+          rows.push(['', '', 'รวม', '', '', r.total.toFixed(2)]);
+          App.downloadText('bank-transfer-' + month + '.csv', App.csv(rows));
+        };
         document.getElementById('btn-print-bank').onclick = function () {
           App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
           window.print();

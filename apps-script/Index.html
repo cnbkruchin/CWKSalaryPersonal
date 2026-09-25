@@ -3,22 +3,28 @@
 <head>
   <base target="_top">
   <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
   <?!= include('Styles'); ?>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script>window.APP_CONFIG = <?!= appConfigJson ?>;</script>
 </head>
 <body class="min-h-screen">
-  <div id="toast-wrap"></div>
+  <div id="toast-wrap" role="status" aria-live="polite"></div>
   <div id="modal-root"></div>
   <div id="app-root" class="min-h-screen"></div>
 
   <?!= include('JsApi'); ?>
   <?!= include('JsPayslip'); ?>
   <?!= include('JsAuth'); ?>
+  <?!= include('JsEmployeePortal'); ?>
+  <?!= include('JsVerify'); ?>
+  <?!= include('JsAdminDashboard'); ?>
   <?!= include('JsAdminEmployees'); ?>
   <?!= include('JsAdminSalary'); ?>
   <?!= include('JsAdminPayroll'); ?>
   <?!= include('JsAdminReports'); ?>
+  <?!= include('JsAdminAudit'); ?>
   <?!= include('JsAdminSettings'); ?>
-  <?!= include('JsEmployeePortal'); ?>
   <?!= include('JsMain'); ?>
 </body>
 </html>

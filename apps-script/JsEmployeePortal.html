@@ -1,71 +1,242 @@
 <script>
+  /**
+   * หน้าบ้าน (ลูกจ้าง) — ออกแบบสำหรับมือถือเป็นหลัก: แท็บล่าง 3 เมนู
+   * สลิปเงินเดือน | สรุปรายปี | ข้อมูลของฉัน
+   */
   App.views.employeePortal = function (root, params) {
     var session = App.session.get();
+    var tab = (params && params.tab) || 'slip';
+    var TABS = [
+      { key: 'slip', label: 'สลิปเงินเดือน', icon: 'slip' },
+      { key: 'year', label: 'สรุปรายปี', icon: 'chart' },
+      { key: 'profile', label: 'ข้อมูลของฉัน', icon: 'user' }
+    ];
+
     root.innerHTML =
       '<div class="min-h-screen">' +
-        App.topbar('สลิปเงินเดือนของฉัน', session.fullName) +
-        '<div class="max-w-4xl mx-auto p-6">' +
-          '<div class="flex items-center gap-3 mb-5">' +
-            '<label class="label m-0">เลือกเดือน</label>' +
-            '<select id="month-select" class="input max-w-xs"></select>' +
+        '<header class="no-print bg-white border-b border-gray-200 sticky top-0 z-30">' +
+          '<div class="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">' +
+            '<img src="' + App.SCHOOL_LOGO + '" alt="" class="h-9 w-auto">' +
+            '<div class="flex-1 min-w-0"><div class="font-bold text-brand-900 text-sm leading-tight">สลิปเงินเดือนออนไลน์</div>' +
+              '<div class="text-xs text-gray-500 truncate">' + App.esc(session.fullName) + '</div></div>' +
+            '<button id="btn-pin" class="btn btn-ghost !px-2.5" title="เปลี่ยน PIN" aria-label="เปลี่ยน PIN"><span class="w-5 h-5">' + App.icon('key') + '</span></button>' +
+            '<button id="btn-logout" class="btn btn-ghost !px-2.5" title="ออกจากระบบ" aria-label="ออกจากระบบ"><span class="w-5 h-5">' + App.icon('logout') + '</span></button>' +
           '</div>' +
-          '<div id="slip-preview"><p class="text-gray-400">กำลังโหลด...</p></div>' +
-          '<div id="history-list" class="mt-8"></div>' +
-        '</div>' +
+          '<nav class="hidden sm:flex max-w-3xl mx-auto px-4 gap-1" aria-label="เมนู">' +
+            TABS.map(function (t) { return '<button data-tab="' + t.key + '" class="tab-top px-3 py-2 text-sm font-semibold border-b-2">' + t.label + '</button>'; }).join('') +
+          '</nav>' +
+        '</header>' +
+        '<main id="portal-main" class="max-w-3xl mx-auto p-4 pb-28 sm:pb-8"></main>' +
+        '<nav class="tabbar sm:hidden no-print" aria-label="เมนู">' +
+          TABS.map(function (t) { return '<button data-tab="' + t.key + '"><span>' + App.icon(t.icon) + '</span>' + t.label + '</button>'; }).join('') +
+        '</nav>' +
       '</div>';
 
-    App.bindTopbarActions();
+    document.getElementById('btn-pin').onclick = function () { App.showChangePinModal(false); };
+    document.getElementById('btn-logout').onclick = function () { App.logout(); };
+    root.querySelectorAll('[data-tab]').forEach(function (b) {
+      b.onclick = function () { switchTab(b.getAttribute('data-tab')); };
+    });
+    switchTab(tab);
 
-    App.call('listMyPayslipMonths').then(function (months) {
-      if (!months.length) {
-        document.getElementById('slip-preview').innerHTML = '<div class="card p-8 text-center text-gray-400">ยังไม่มีสลิปเงินเดือนของคุณในระบบ<br>กรุณาติดต่อฝ่ายการเงินหากคาดว่าควรมีข้อมูลแล้ว</div>';
-        return;
-      }
-      var wantMonth = (params && params.month) || App.currentMonthKey();
-      var available = months.map(function (m) { return m.month; });
-      var selected = available.indexOf(wantMonth) !== -1 ? wantMonth : months[0].month;
+    function switchTab(key) {
+      tab = key;
+      root.querySelectorAll('.tabbar [data-tab]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === key); });
+      root.querySelectorAll('.tab-top').forEach(function (b) {
+        var on = b.getAttribute('data-tab') === key;
+        b.className = 'tab-top px-3 py-2 text-sm font-semibold border-b-2 ' + (on ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-700');
+      });
+      var main = document.getElementById('portal-main');
+      main.innerHTML = '<div class="text-gray-400 text-sm py-10 text-center">กำลังโหลด...</div>';
+      if (key === 'slip') renderSlipTab(main);
+      else if (key === 'year') renderYearTab(main);
+      else renderProfileTab(main);
+    }
 
-      var sel = document.getElementById('month-select');
-      sel.innerHTML = months.map(function (m) {
-        return '<option value="' + m.month + '" ' + (m.month === selected ? 'selected' : '') + '>' + App.esc(m.monthLabel) + '</option>';
-      }).join('');
-      sel.onchange = function () { loadSlip(sel.value); };
+    // ------------------------- แท็บสลิปเงินเดือน -------------------------
+    function renderSlipTab(main) {
+      App.call('listMyPayslipMonths').then(function (months) {
+        if (!months.length) {
+          main.innerHTML = emptyState('ยังไม่มีสลิปเงินเดือนในระบบ', 'สลิปจะแสดงที่นี่ทันทีเมื่อฝ่ายการเงินอนุมัติการจ่ายเงินเดือนของเดือนนั้น');
+          return;
+        }
+        var want = (params && params.month) || App.currentMonthKey();
+        var selected = months.some(function (m) { return m.month === want; }) ? want : months[0].month;
 
-      renderHistory(months, selected);
-      loadSlip(selected);
-    }).catch(function (err) { App.toast(err.message, 'error'); });
+        main.innerHTML =
+          '<div id="slip-hero"></div>' +
+          '<div class="flex items-center justify-between gap-3 mt-5 mb-3">' +
+            '<label class="label !mb-0" for="month-select">เลือกเดือน</label>' +
+            '<select id="month-select" class="input max-w-[14rem]">' +
+              months.map(function (m) { return '<option value="' + m.month + '">' + App.esc(m.monthLabel) + '</option>'; }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div id="slip-preview" class="slip-fit card p-0 overflow-hidden"></div>' +
+          '<h2 class="font-semibold text-sm text-gray-500 mt-8 mb-2">ประวัติย้อนหลัง</h2>' +
+          '<div class="card divide-y divide-gray-100">' +
+            months.map(function (m) {
+              return '<button data-m="' + m.month + '" class="hist-row w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50">' +
+                '<span><span class="font-medium">' + App.esc(m.monthLabel) + '</span>' +
+                (m.paidDateLabel ? '<span class="block text-xs text-gray-400">จ่ายเมื่อ ' + App.esc(m.paidDateLabel) + '</span>' : '') + '</span>' +
+                '<span class="font-semibold tabular-nums">' + App.money(m.netPay) + ' ฿</span></button>';
+            }).join('') +
+          '</div>';
+
+        var sel = document.getElementById('month-select');
+        sel.value = selected;
+        sel.onchange = function () { loadSlip(sel.value); };
+        main.querySelectorAll('.hist-row').forEach(function (b) {
+          b.onclick = function () {
+            sel.value = b.getAttribute('data-m');
+            loadSlip(sel.value);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          };
+        });
+        loadSlip(selected);
+      }).catch(function (err) { main.innerHTML = emptyState('โหลดข้อมูลไม่สำเร็จ', err.message); });
+    }
 
     function loadSlip(month) {
-      document.getElementById('slip-preview').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      var preview = document.getElementById('slip-preview');
+      preview.innerHTML = '<div class="text-gray-400 text-sm p-8 text-center">กำลังโหลด...</div>';
       App.call('getMyPayslip', month).then(function (slip) {
-        document.getElementById('slip-preview').innerHTML =
-          '<div class="no-print mb-3 text-right"><button id="btn-print-my" class="btn btn-primary">พิมพ์ / ดาวน์โหลด PDF</button></div>' +
-          App.renderPayslip(slip);
+        document.getElementById('slip-hero').innerHTML =
+          '<div class="hero-net p-5">' +
+            '<div class="text-sm opacity-80">เงินเดือนสุทธิ · ' + App.esc(slip.monthLabel) + '</div>' +
+            '<div class="text-4xl font-bold mt-1 tabular-nums">' + App.money(slip.netPay) + ' <span class="text-lg font-semibold opacity-80">บาท</span></div>' +
+            '<div class="text-xs opacity-80 mt-1">' + App.esc(slip.netPayText) + '</div>' +
+            '<div class="grid grid-cols-2 gap-3 mt-4 text-sm">' +
+              '<div class="bg-white/10 rounded-xl px-3 py-2"><div class="opacity-80 text-xs">รวมรายรับ</div><div class="font-semibold tabular-nums">' + App.money(slip.grossPay) + '</div></div>' +
+              '<div class="bg-white/10 rounded-xl px-3 py-2"><div class="opacity-80 text-xs">รวมรายการหัก</div><div class="font-semibold tabular-nums">' + App.money(slip.totalDeduction) + '</div></div>' +
+            '</div>' +
+            '<button id="btn-print-my" class="btn btn-lg w-full justify-center mt-4 bg-white text-brand-700 hover:bg-brand-50">' +
+              '<span class="w-5 h-5">' + App.icon('print') + '</span> พิมพ์ / บันทึกเป็น PDF</button>' +
+          '</div>';
         document.getElementById('btn-print-my').onclick = function () {
-          App.showPrintView([slip], 'สลิปเงินเดือน — ' + slip.monthLabel, '#/me?month=' + month);
+          App.showPrintView([slip], 'สลิปเงินเดือน — ' + slip.monthLabel, '/me?tab=slip&month=' + month);
         };
+        document.getElementById('slip-preview').innerHTML = App.renderPayslip(slip);
+        App.fitSlips(document.getElementById('portal-main'));
       }).catch(function (err) {
-        document.getElementById('slip-preview').innerHTML = '<div class="card p-6 text-gray-400">' + App.esc(err.message) + '</div>';
+        preview.innerHTML = '<div class="text-gray-500 text-sm p-8 text-center">' + App.esc(err.message) + '</div>';
       });
     }
 
-    function renderHistory(months, selected) {
-      document.getElementById('history-list').innerHTML =
-        '<h2 class="font-semibold mb-2 text-sm text-gray-500">ประวัติย้อนหลัง</h2>' +
-        '<div class="card overflow-x-auto"><table class="table-clean w-full">' +
-          '<thead><tr><th>เดือน</th><th class="text-right">ยอดสุทธิ</th><th></th></tr></thead><tbody>' +
-          months.map(function (m) {
-            return '<tr><td>' + App.esc(m.monthLabel) + '</td><td class="text-right">' + App.money(m.netPay) + ' บาท</td>' +
-              '<td class="text-right"><button data-m="' + m.month + '" class="btn-view-month btn btn-secondary !px-2 !py-1 text-xs">' + (m.month === selected ? 'กำลังดู' : 'ดู') + '</button></td></tr>';
-          }).join('') +
-        '</tbody></table></div>';
-      document.querySelectorAll('.btn-view-month').forEach(function (btn) {
-        btn.onclick = function () {
-          var m = btn.getAttribute('data-m');
-          document.getElementById('month-select').value = m;
-          loadSlip(m);
+    // ------------------------- แท็บสรุปรายปี -------------------------
+    function renderYearTab(main, year) {
+      App.call('getMyAnnualSummary', year || null).then(function (d) {
+        if (!d.years.length) {
+          main.innerHTML = emptyState('ยังไม่มีข้อมูลรายได้', 'สรุปรายได้ทั้งปีจะแสดงเมื่อมีสลิปเงินเดือนที่อนุมัติแล้วอย่างน้อย 1 เดือน');
+          return;
+        }
+        main.innerHTML =
+          '<div class="flex items-center justify-between gap-3 mb-4">' +
+            '<h1 class="text-lg font-bold">สรุปรายได้ ปี พ.ศ. ' + d.yearBE + '</h1>' +
+            '<select id="year-select" class="input max-w-[9rem]">' +
+              d.years.map(function (y) { return '<option value="' + y.year + '"' + (y.year === d.year ? ' selected' : '') + '>พ.ศ. ' + y.yearBE + '</option>'; }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3">' +
+            tile('รายได้รวมทั้งปี', d.totals.grossPay, 'ก่อนหักรายการใด ๆ') +
+            tile('ประกันสังคมที่จ่าย', d.totals.ssoEmployee, 'ใช้เป็นค่าลดหย่อนภาษีได้') +
+            tile('รับสุทธิทั้งปี', d.totals.netPay, d.rows.length + ' เดือน') +
+          '</div>' +
+          '<div class="card overflow-x-auto mt-4"><table class="table-clean w-full">' +
+            '<thead><tr><th>เดือน</th><th class="text-right">รายรับรวม</th><th class="text-right">ปกส.</th><th class="text-right">สุทธิ</th></tr></thead><tbody>' +
+            d.rows.map(function (r) {
+              return '<tr><td>' + App.esc(r.monthLabel) + '</td><td class="text-right tabular-nums">' + App.money(r.grossPay) + '</td>' +
+                '<td class="text-right tabular-nums">' + App.money(r.ssoEmployee) + '</td><td class="text-right tabular-nums font-semibold">' + App.money(r.netPay) + '</td></tr>';
+            }).join('') +
+            '</tbody></table></div>' +
+          '<button id="btn-print-year" class="btn btn-primary btn-lg w-full sm:w-auto justify-center mt-4"><span class="w-5 h-5">' + App.icon('print') + '</span> พิมพ์หนังสือสรุปรายได้ (ใช้ยื่นภาษี/ยื่นกู้)</button>' +
+          '<p class="text-xs text-gray-400 mt-3">ปีภาษีนับตามปีปฏิทิน (ม.ค.–ธ.ค.) ใช้ข้อมูลประกอบการยื่นแบบ ภ.ง.ด.90/91 ได้</p>';
+
+        document.getElementById('year-select').onchange = function () { renderYearTab(main, this.value); };
+        document.getElementById('btn-print-year').onclick = function () {
+          App.showDocPrint(App.renderAnnualSummary(d), 'สรุปรายได้ประจำปี พ.ศ. ' + d.yearBE, '/me?tab=year');
         };
-      });
+      }).catch(function (err) { main.innerHTML = emptyState('โหลดข้อมูลไม่สำเร็จ', err.message); });
     }
+
+    function tile(caption, value, note) {
+      return '<div class="card p-4 stat-tile"><div class="caption">' + caption + '</div>' +
+        '<div class="value">' + App.money(value) + '</div><div class="text-xs text-gray-400">' + note + '</div></div>';
+    }
+
+    // ------------------------- แท็บข้อมูลของฉัน -------------------------
+    function renderProfileTab(main) {
+      App.call('getMyProfile').then(function (p) {
+        var row = function (k, v) {
+          return '<div class="flex justify-between gap-4 py-2.5 border-b border-gray-100 last:border-0"><span class="text-gray-500 text-sm">' + k + '</span>' +
+            '<span class="text-sm font-medium text-right">' + (v || '-') + '</span></div>';
+        };
+        main.innerHTML =
+          '<div class="card p-5">' +
+            '<div class="text-lg font-bold">' + App.esc(p.fullName) + '</div>' +
+            '<div class="text-sm text-gray-500">' + App.esc(p.position || p.group || '') + '</div>' +
+            '<div class="mt-3">' +
+              row('รหัสพนักงาน', App.esc(p.employeeId)) +
+              row('กลุ่มงาน', App.esc(p.group)) +
+              row('วันที่เริ่มงาน', App.esc(p.startDateLabel)) +
+              row('ประกันสังคม', p.hasSSO ? 'เป็นผู้ประกันตน' : 'ไม่ได้หักสมทบ') +
+              row('เลขประจำตัวประชาชน', '<span class="font-mono">' + App.esc(p.citizenIdMasked) + '</span>') +
+            '</div>' +
+          '</div>' +
+          '<div class="card p-5 mt-4"><h2 class="font-semibold mb-1">บัญชีรับเงินเดือน</h2>' +
+            row('ธนาคาร', App.esc(p.bankName)) +
+            row('เลขที่บัญชี', '<span class="font-mono">' + App.esc(p.bankAccountMasked) + '</span>') +
+          '</div>' +
+          (p.salaryHistory.length
+            ? '<div class="card p-5 mt-4"><h2 class="font-semibold mb-3">ประวัติอัตราเงินเดือน</h2><ol class="relative border-l-2 border-brand-100 ml-2 space-y-4">' +
+                p.salaryHistory.map(function (h) {
+                  return '<li class="ml-4"><span class="absolute -left-[7px] mt-1.5 w-3 h-3 rounded-full bg-brand-500"></span>' +
+                    '<div class="text-sm font-semibold">' + App.money(h.baseSalary) + ' บาท <span class="text-gray-400 font-normal">· ' + App.esc(h.changeType) + '</span></div>' +
+                    '<div class="text-xs text-gray-500">มีผลตั้งแต่ ' + App.esc(h.monthLabel) + '</div></li>';
+                }).join('') + '</ol></div>'
+            : '') +
+          '<div class="card p-5 mt-4"><h2 class="font-semibold mb-1">ความปลอดภัยของบัญชี</h2>' +
+            row('เข้าใช้งานล่าสุด', App.esc(App.dateTime(p.lastLoginAt))) +
+            '<button id="btn-pin2" class="btn btn-secondary w-full justify-center mt-3"><span class="w-4 h-4">' + App.icon('key') + '</span> เปลี่ยน PIN</button>' +
+          '</div>' +
+          '<p class="text-xs text-gray-400 mt-4 text-center">ข้อมูลไม่ถูกต้อง? แจ้งฝ่ายการเงินของโรงเรียนเพื่อแก้ไข (สิทธิ์ตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล)</p>';
+        document.getElementById('btn-pin2').onclick = function () { App.showChangePinModal(false); };
+      }).catch(function (err) { main.innerHTML = emptyState('โหลดข้อมูลไม่สำเร็จ', err.message); });
+    }
+
+    function emptyState(title, text) {
+      return '<div class="card p-10 text-center"><div class="w-10 h-10 mx-auto text-gray-300 mb-3">' + App.icon('slip') + '</div>' +
+        '<div class="font-semibold text-gray-700">' + App.esc(title) + '</div><div class="text-sm text-gray-500 mt-1">' + App.esc(text) + '</div></div>';
+    }
+  };
+
+  /** เอกสารสรุปรายได้ประจำปี (A4 แนวตั้ง) */
+  App.renderAnnualSummary = function (d) {
+    return '<div style="font-family:Sarabun,sans-serif;max-width:190mm;margin:0 auto" class="text-[14px] leading-relaxed">' +
+      '<div class="flex items-center gap-4 border-b-2 border-brand-600 pb-3 mb-4">' +
+        '<img src="' + App.SCHOOL_LOGO + '" alt="" style="height:60px">' +
+        '<div><div class="text-lg font-bold">' + App.esc(d.schoolName) + '</div><div class="text-sm text-gray-600">' + App.esc(d.schoolAddress) + '</div></div>' +
+      '</div>' +
+      '<div class="text-center font-bold text-base mb-4">สรุปรายได้ค่าจ้างประจำปี พ.ศ. ' + d.yearBE + '</div>' +
+      '<p>ชื่อ-สกุล <b>' + App.esc(d.fullName) + '</b> &nbsp; รหัสพนักงาน ' + App.esc(d.employeeId) + ' &nbsp; ตำแหน่ง ' + App.esc(d.position) + '</p>' +
+      '<table class="w-full mt-3" style="border-collapse:collapse">' +
+        '<thead><tr>' + ['เดือน', 'เงินเดือน', 'รายรับอื่น', 'รวมรายรับ', 'ประกันสังคม', 'หักอื่น', 'สุทธิ'].map(function (h, i) {
+          return '<th class="border border-gray-700 p-1.5 ' + (i ? 'text-right' : '') + '">' + h + '</th>';
+        }).join('') + '</tr></thead><tbody>' +
+        d.rows.map(function (r) {
+          return '<tr><td class="border border-gray-700 p-1.5">' + App.esc(r.monthLabel) + '</td>' +
+            [r.baseSalary, r.otherIncome, r.grossPay, r.ssoEmployee, r.otherDeduction, r.netPay].map(function (v) {
+              return '<td class="border border-gray-700 p-1.5 text-right">' + App.money(v) + '</td>';
+            }).join('') + '</tr>';
+        }).join('') +
+        '<tr class="font-bold"><td class="border border-gray-700 p-1.5">รวมทั้งปี</td>' +
+          [d.totals.baseSalary, d.totals.otherIncome, d.totals.grossPay, d.totals.ssoEmployee, d.totals.otherDeduction, d.totals.netPay].map(function (v) {
+            return '<td class="border border-gray-700 p-1.5 text-right">' + App.money(v) + '</td>';
+          }).join('') + '</tr>' +
+      '</tbody></table>' +
+      '<p class="mt-3">รวมรายได้ทั้งปี ' + App.money(d.totals.grossPay) + ' บาท (' + App.esc(d.grossText) + ')</p>' +
+      '<p class="text-xs text-gray-500 mt-1">* จัดทำจากข้อมูลสลิปเงินเดือนที่ได้รับอนุมัติในระบบ ณ วันที่พิมพ์ ' + new Date().toLocaleDateString('th-TH', { dateStyle: 'long' }) + '</p>' +
+      '<div class="flex justify-end mt-12"><div class="text-center">ลงชื่อ.................................................<br>' +
+        '(' + App.esc(d.financeOfficerName || '.................................') + ')<br>' + App.esc(d.financeOfficerTitle || 'เจ้าหน้าที่การเงิน') + '</div></div>' +
+    '</div>';
   };
 </script>
