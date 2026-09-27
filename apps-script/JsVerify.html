@@ -1,54 +1,58 @@
 <script>
-  /** หน้าสาธารณะ: ตรวจสอบความถูกต้องของสลิปเงินเดือน (สแกน QR จากสลิป หรือกรอกรหัส) ไม่ต้องล็อกอิน */
+  /** หน้าสาธารณะ: ตรวจสอบความถูกต้องของสลิปเงินเดือน (สแกน QR จากสลิป หรือกรอกรหัส) ไม่ต้องล็อกอิน — ไทย/อังกฤษ */
   App.views.verify = function (root) {
+    var lastCode = App.config.verifyCode || '';
     root.innerHTML =
       '<div class="login-bg min-h-screen flex flex-col items-center justify-center p-4">' +
         '<div class="w-full max-w-md">' +
+          '<div class="flex justify-end mb-2">' + App.langToggle() + '</div>' +
           '<div class="text-center mb-6">' +
-            '<img src="' + App.SCHOOL_LOGO + '" alt="ตราโรงเรียนจุนวิทยาคม" class="mx-auto h-16 w-auto mb-3 mix-blend-multiply">' +
-            '<div class="text-lg font-bold text-brand-900">ตรวจสอบความถูกต้องของสลิปเงินเดือน</div>' +
-            '<div class="text-sm text-gray-500">โรงเรียนจุนวิทยาคม อำเภอจุน จังหวัดพะเยา</div>' +
+            '<img src="' + App.SCHOOL_LOGO + '" alt="" class="mx-auto h-16 w-auto mb-3 mix-blend-multiply">' +
+            '<div class="text-lg font-bold text-brand-900">' + App.t('verifyTitle') + '</div>' +
+            '<div class="text-sm text-gray-500">' + App.t('school') + '</div>' +
           '</div>' +
           '<form id="verify-form" class="card p-5 flex gap-2">' +
-            '<label for="verify-code" class="sr-only">รหัสตรวจสอบ</label>' +
+            '<label for="verify-code" class="sr-only">' + App.t('verifyCode') + '</label>' +
             '<input id="verify-code" class="input font-mono uppercase" placeholder="CWK-XXXX-XXXX-XXXX" autocapitalize="characters" spellcheck="false" required>' +
-            '<button class="btn btn-primary" type="submit">ตรวจสอบ</button>' +
+            '<button class="btn btn-primary" type="submit">' + App.t('verifyBtn') + '</button>' +
           '</form>' +
           '<div id="verify-result" class="mt-4" aria-live="polite"></div>' +
-          '<p class="text-xs text-gray-400 text-center mt-6">ระบบแสดงยอดเงินจากฐานข้อมูลจริงของโรงเรียน หากตัวเลขบนเอกสารที่ได้รับไม่ตรงกับหน้านี้ แสดงว่าเอกสารอาจถูกแก้ไข</p>' +
+          '<p class="text-xs text-gray-400 text-center mt-6">' + App.t('verifyNote') + '</p>' +
         '</div>' +
       '</div>';
 
+    App.bindLangToggle(root);
     var input = document.getElementById('verify-code');
     document.getElementById('verify-form').onsubmit = function (ev) {
       ev.preventDefault();
       check(input.value);
     };
-    if (App.config.verifyCode) {
-      input.value = App.config.verifyCode;
-      check(App.config.verifyCode);
+    if (lastCode) {
+      input.value = lastCode;
+      check(lastCode);
     }
 
     function check(code) {
+      App.config.verifyCode = code;
       var out = document.getElementById('verify-result');
-      out.innerHTML = '<div class="card p-5 text-sm text-gray-400 text-center">กำลังตรวจสอบ...</div>';
+      out.innerHTML = '<div class="card p-5 text-sm text-gray-400 text-center">' + App.t('verifying') + '</div>';
       App.api('verifyPayslip', code).then(function (r) {
         if (!r.valid) {
-          out.innerHTML = '<div class="card p-5 border-l-4 border-red-600"><div class="font-bold text-red-700">✕ ไม่พบสลิปที่ตรงกับรหัสนี้</div>' +
-            '<div class="text-sm text-gray-600 mt-1">รหัสไม่ถูกต้อง หรือสลิปถูกแก้ไข/ยกเลิก กรุณาติดต่อฝ่ายการเงินของโรงเรียน</div></div>';
+          out.innerHTML = '<div class="card p-5 border-l-4 border-red-600"><div class="font-bold text-red-700">' + App.t('verifyInvalid') + '</div>' +
+            '<div class="text-sm text-gray-600 mt-1">' + App.t('verifyInvalidText') + '</div></div>';
           return;
         }
-        var row = function (k, v) { return '<div class="flex justify-between py-2 border-b border-gray-100 last:border-0 text-sm"><span class="text-gray-500">' + k + '</span><span class="font-semibold text-right">' + v + '</span></div>'; };
+        var row = function (k, v) { return '<div class="flex justify-between gap-3 py-2 border-b border-gray-100 last:border-0 text-sm"><span class="text-gray-500">' + k + '</span><span class="font-semibold text-right">' + v + '</span></div>'; };
         out.innerHTML =
           '<div class="card p-5 border-l-4 border-green-600">' +
-            '<div class="font-bold text-green-700">✓ สลิปนี้ออกโดย' + App.esc(r.schoolName) + ' และข้อมูลถูกต้อง</div>' +
-            '<div class="text-xs text-gray-500 mb-3">รหัส ' + App.esc(r.code) + '</div>' +
-            row('ชื่อ', App.esc(r.name)) +
-            row('ตำแหน่ง', App.esc(r.position)) +
-            row('ประจำเดือน', App.esc(r.monthLabel)) +
-            row('รวมรายรับ', App.money(r.grossPay) + ' บาท') +
-            row('รับสุทธิ', App.money(r.netPay) + ' บาท') +
-            row('วันที่จ่าย', App.esc(r.paidDateLabel || '-')) +
+            '<div class="font-bold text-green-700">' + App.t('verifyValid', { school: App.esc(r.schoolName) }) + '</div>' +
+            '<div class="text-xs text-gray-500 mb-3">' + App.t('vCode') + ' ' + App.esc(r.code) + '</div>' +
+            row(App.t('vName'), App.esc(r.name)) +
+            row(App.t('vPosition'), App.esc(r.position)) +
+            row(App.t('vMonth'), App.esc(App.monthName(r.month))) +
+            row(App.t('vGross'), App.money(r.grossPay) + ' ' + App.t('baht')) +
+            row(App.t('vNet'), App.money(r.netPay) + ' ' + App.t('baht')) +
+            row(App.t('vPaid'), App.esc(App.dateShort(r.paidDate) || '-')) +
           '</div>';
       }).catch(function (err) {
         out.innerHTML = '<div class="card p-5 text-sm text-red-700">' + App.esc(err.message) + '</div>';

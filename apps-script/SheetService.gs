@@ -18,10 +18,10 @@ var SHEET_NAMES = {
 };
 
 var SHEET_HEADERS = {
-  Employees: ['EmployeeID', 'PrefixName', 'FirstName', 'LastName', 'Group', 'Position', 'StartDate', 'Status', 'HasSSO', 'BankName', 'BankAccountNo', 'CitizenID', 'Phone', 'Role', 'PinHash', 'PinSalt', 'Note', 'CreatedAt', 'MustChangePin', 'PdpaAcceptedAt', 'LastLoginAt'],
+  Employees: ['EmployeeID', 'PrefixName', 'FirstName', 'LastName', 'Group', 'Position', 'StartDate', 'Status', 'HasSSO', 'BankName', 'BankAccountNo', 'CitizenID', 'Phone', 'Role', 'PinHash', 'PinSalt', 'Note', 'CreatedAt', 'MustChangePin', 'PdpaAcceptedAt', 'LastLoginAt', 'EmploymentType'],
   SalaryHistory: ['HistoryID', 'EmployeeID', 'EffectiveMonth', 'BaseSalary', 'ChangeType', 'ApprovedDate', 'ApprovedBy', 'Note', 'CreatedAt'],
   BackPayQueue: ['QueueID', 'EmployeeID', 'FromMonth', 'ToMonth', 'OldBaseSalary', 'NewBaseSalary', 'MonthlyDiff', 'MonthsCount', 'TotalBackPay', 'Status', 'AppliedRunMonth', 'CreatedAt', 'Note'],
-  PayrollRuns: ['Month', 'EmployeeID', 'BaseSalary', 'PositionAllowance', 'OnDutyPay', 'OtherIncome', 'OtherIncomeNote', 'BackPay', 'BackPayNote', 'GrossPay', 'SSOEmployee', 'SSOEmployer', 'CompFundEmployer', 'OtherDeductionTotal', 'TotalDeduction', 'NetPay', 'Status', 'PaidDate', 'UpdatedAt', 'UpdatedBy'],
+  PayrollRuns: ['Month', 'EmployeeID', 'BaseSalary', 'PositionAllowance', 'OnDutyPay', 'OtherIncome', 'OtherIncomeNote', 'BackPay', 'BackPayNote', 'GrossPay', 'SSOEmployee', 'SSOEmployer', 'CompFundEmployer', 'OtherDeductionTotal', 'TotalDeduction', 'NetPay', 'Status', 'PaidDate', 'UpdatedAt', 'UpdatedBy', 'Note', 'Source'],
   PayrollDeductions: ['DeductionID', 'Month', 'EmployeeID', 'Category', 'Label', 'Amount'],
   Settings: ['Key', 'Value'],
   AuditLog: ['Timestamp', 'ActorID', 'Role', 'Action', 'Target', 'Detail']
@@ -43,6 +43,12 @@ var DEFAULT_SETTINGS = {
   DirectorName: '',
   DirectorTitle: 'ผู้อำนวยการโรงเรียน',
   DataControllerContact: 'ฝ่ายการเงิน โรงเรียนจุนวิทยาคม',
+  DefaultPayDay: 'last-workday',
+  SchoolBankName: 'ธนาคารกรุงไทย',
+  SchoolBankBranch: '',
+  SchoolBankAccountName: '',
+  SchoolBankAccountNo: '',
+  MemoDocPrefix: '',
   SessionTimeoutMinutes: '480'
 };
 

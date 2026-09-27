@@ -12,26 +12,38 @@
       body.innerHTML =
         
         '<form id="settings-form" class="card p-6 space-y-6">' +
-          '<div><h2 class="font-semibold mb-3">ข้อมูลโรงเรียน</h2><div class="grid grid-cols-2 gap-3">' +
+          '<div><h2 class="font-semibold mb-3">ข้อมูลโรงเรียน</h2><div class="grid sm:grid-cols-2 gap-3">' +
             field('SchoolName', 'ชื่อโรงเรียน', settings) +
             field('SchoolAddress', 'ที่อยู่/อำเภอ-จังหวัด', settings) +
             '<div class="col-span-2">' + field('SchoolDistrictOffice', 'สังกัดสำนักงานเขตพื้นที่การศึกษา', settings) + '</div>' +
           '</div></div>' +
 
-          '<div><h2 class="font-semibold mb-3">อัตราการหักเงินสมทบ</h2><div class="grid grid-cols-3 gap-3">' +
+          '<div><h2 class="font-semibold mb-3">อัตราการหักเงินสมทบ</h2><div class="grid sm:grid-cols-3 gap-3">' +
             field('SSORate', 'อัตราประกันสังคม (เช่น 0.05 = 5%)', settings, 'number') +
             field('SSOWageCap', 'เพดานเงินเดือนคำนวณ ปกส. (บาท)', settings, 'number') +
             field('CompFundRate', 'อัตรากองทุนเงินทดแทน (นายจ้างจ่ายเอง ไม่หักจากลูกจ้าง)', settings, 'number') +
           '</div></div>' +
 
-          '<div><h2 class="font-semibold mb-3">ผู้ลงนามในบันทึกข้อความขออนุมัติ</h2><div class="grid grid-cols-2 gap-3">' +
+          '<div><h2 class="font-semibold mb-3">ผู้ลงนามในบันทึกข้อความขออนุมัติ</h2><div class="grid sm:grid-cols-2 gap-3">' +
             field('FinanceOfficerName', 'ชื่อเจ้าหน้าที่การเงิน', settings) + field('FinanceOfficerTitle', 'ตำแหน่ง', settings) +
             field('BudgetHeadName', 'ชื่อหัวหน้างบประมาณ', settings) + field('BudgetHeadTitle', 'ตำแหน่ง', settings) +
             field('DeputyDirectorName', 'ชื่อรองผู้อำนวยการ', settings) + field('DeputyDirectorTitle', 'ตำแหน่ง', settings) +
             field('DirectorName', 'ชื่อผู้อำนวยการ', settings) + field('DirectorTitle', 'ตำแหน่ง', settings) +
           '</div></div>' +
 
-          '<div><h2 class="font-semibold mb-3">ระบบ</h2><div class="grid grid-cols-2 gap-3">' +
+          '<div><h2 class="font-semibold mb-3">การจ่ายเงินเดือนและบัญชีธนาคารของโรงเรียน</h2><div class="grid sm:grid-cols-2 gap-3">' +
+            '<div><label class="label" for="s-DefaultPayDay">วันจ่ายเงินเดือนปกติ (ค่าตั้งต้นตอนอนุมัติ)</label><select id="s-DefaultPayDay" class="input">' +
+              '<option value="last-workday">วันทำการสุดท้ายของเดือน</option>' +
+              [20, 25, 26, 27, 28, 30].map(function (d) { return '<option value="' + d + '">วันที่ ' + d + ' ของเดือน (ตรงวันหยุดเลื่อนเป็นศุกร์ก่อนหน้า)</option>'; }).join('') +
+            '</select></div>' +
+            field('MemoDocPrefix', 'เลขที่หนังสือ (ส่วนหน้า เช่น ศธ 04xxx.xx)', settings) +
+            field('SchoolBankName', 'ธนาคารที่ใช้โอนเงินเดือน', settings) +
+            field('SchoolBankBranch', 'สาขา', settings) +
+            field('SchoolBankAccountName', 'ชื่อบัญชีโรงเรียน (บัญชีต้นทาง)', settings) +
+            field('SchoolBankAccountNo', 'เลขที่บัญชีโรงเรียน', settings) +
+          '</div></div>' +
+
+          '<div><h2 class="font-semibold mb-3">ระบบ</h2><div class="grid sm:grid-cols-2 gap-3">' +
             field('SessionTimeoutMinutes', 'อายุเซสชันหลังบ้าน (นาที)', settings, 'number') +
             field('DataControllerContact', 'ช่องทางติดต่อเรื่องข้อมูลส่วนบุคคล (แสดงในประกาศ PDPA)', settings) +
           '</div></div>' +
@@ -39,11 +51,13 @@
           '<div class="flex justify-end"><button type="submit" class="btn btn-primary">บันทึกการตั้งค่า</button></div>' +
         '</form>';
 
+      document.getElementById('s-DefaultPayDay').value = settings.DefaultPayDay || 'last-workday';
       document.getElementById('settings-form').onsubmit = function (ev) {
         ev.preventDefault();
         var keys = ['SchoolName', 'SchoolAddress', 'SchoolDistrictOffice', 'SSORate', 'SSOWageCap', 'CompFundRate',
           'FinanceOfficerName', 'FinanceOfficerTitle', 'BudgetHeadName', 'BudgetHeadTitle',
-          'DeputyDirectorName', 'DeputyDirectorTitle', 'DirectorName', 'DirectorTitle', 'SessionTimeoutMinutes', 'DataControllerContact'];
+          'DeputyDirectorName', 'DeputyDirectorTitle', 'DirectorName', 'DirectorTitle', 'SessionTimeoutMinutes', 'DataControllerContact',
+          'DefaultPayDay', 'MemoDocPrefix', 'SchoolBankName', 'SchoolBankBranch', 'SchoolBankAccountName', 'SchoolBankAccountNo'];
         var patch = {};
         keys.forEach(function (k) { patch[k] = document.getElementById('s-' + k).value; });
         App.call('updateSettings', patch).then(function () {

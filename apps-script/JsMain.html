@@ -6,7 +6,8 @@
     { key: 'payroll', path: '/admin/payroll', label: 'รอบจ่ายเงินเดือน' },
     { key: 'salary', path: '/admin/salary', label: 'เลื่อนขั้น / ตกเบิก' },
     { key: 'employees', path: '/admin/employees', label: 'ทะเบียนลูกจ้าง' },
-    { key: 'reports', path: '/admin/reports', label: 'รายงาน / เอกสาร' },
+    { key: 'reports', path: '/admin/reports', label: 'เอกสารเบิกจ่าย' },
+    { key: 'import', path: '/admin/import', label: 'นำเข้าข้อมูล Excel' },
     { key: 'audit', path: '/admin/audit', label: 'ประวัติการใช้งาน' },
     { key: 'settings', path: '/admin/settings', label: 'ตั้งค่าระบบ' }
   ];
@@ -74,7 +75,7 @@
     idleTimer = setTimeout(function () {
       if (!App.session.get()) return;
       App.logout(true);
-      App.toast('ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งาน 15 นาที', 'info');
+      App.toast(App.t('idleOut'), 'info');
     }, IDLE_MS);
   }
   ['click', 'keydown', 'touchstart', 'scroll'].forEach(function (ev) {
@@ -96,6 +97,7 @@
         '/admin/employees': { view: App.views.adminEmployees, auth: true },
         '/admin/reports': { view: App.views.adminReports, auth: true },
         '/admin/audit': { view: App.views.adminAudit, auth: true },
+        '/admin/import': { view: App.views.adminImport, auth: true },
         '/admin/settings': { view: App.views.adminSettings, auth: true }
       }
     };

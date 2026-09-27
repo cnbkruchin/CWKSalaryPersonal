@@ -6,7 +6,7 @@
     return '<div class="text-center mb-6">' +
       '<img src="' + App.SCHOOL_LOGO + '" alt="ตราโรงเรียนจุนวิทยาคม" class="mx-auto h-16 w-auto mb-3 mix-blend-multiply">' +
       '<div class="text-lg font-bold text-brand-900">' + App.esc(subtitle) + '</div>' +
-      '<div class="text-sm text-gray-500 mt-0.5">โรงเรียนจุนวิทยาคม อำเภอจุน จังหวัดพะเยา</div>' +
+      '<div class="text-sm text-gray-500 mt-0.5">' + App.t('school') + '</div>' +
     '</div>';
   }
 
@@ -19,20 +19,22 @@
       root.innerHTML =
         '<div class="login-bg min-h-screen flex flex-col items-center justify-center p-4">' +
           '<div class="w-full max-w-sm">' +
-            brandHeader('สลิปเงินเดือนออนไลน์') +
+            '<div class="flex justify-end mb-2">' + App.langToggle() + '</div>' +
+            brandHeader(App.t('appName')) +
             '<div class="card p-6">' + (state.step === 'id' ? idStep() : pinStep()) + '</div>' +
-            '<p class="text-xs text-gray-400 text-center mt-5">ลืม PIN หรือถูกล็อก? ติดต่อฝ่ายการเงินของโรงเรียนเพื่อขอรหัสใหม่</p>' +
-            (App.config.appUrl ? '<p class="text-center mt-2"><a href="' + App.esc(App.config.appUrl) + '?page=admin" class="text-xs text-brand-600 hover:underline">สำหรับเจ้าหน้าที่ →</a></p>' : '') +
+            '<p class="text-xs text-gray-400 text-center mt-5">' + App.t('forgot') + '</p>' +
+            (App.config.appUrl ? '<p class="text-center mt-2"><a href="' + App.esc(App.config.appUrl) + '?page=admin" class="text-xs text-brand-600 hover:underline">' + App.t('staff') + '</a></p>' : '') +
           '</div>' +
         '</div>';
+      App.bindLangToggle(root);
       state.step === 'id' ? bindIdStep() : bindPinStep();
     }
 
     function idStep() {
       return '<form id="id-form" class="space-y-4">' +
-        '<div><label class="label" for="emp-id">รหัสพนักงาน</label>' +
-        '<input id="emp-id" class="input !text-lg !py-3" placeholder="เช่น Cwk001" autocomplete="username" autocapitalize="off" spellcheck="false" required value="' + App.esc(state.id) + '"></div>' +
-        '<button type="submit" class="btn btn-primary btn-lg w-full justify-center">ถัดไป</button>' +
+        '<div><label class="label" for="emp-id">' + App.t('employeeId') + '</label>' +
+        '<input id="emp-id" class="input !text-lg !py-3" placeholder="' + App.t('idPlaceholder') + '" autocomplete="username" autocapitalize="off" spellcheck="false" required value="' + App.esc(state.id) + '"></div>' +
+        '<button type="submit" class="btn btn-primary btn-lg w-full justify-center">' + App.t('next') + '</button>' +
       '</form>';
     }
 
@@ -53,16 +55,16 @@
       var dots = '';
       for (var i = 0; i < 6; i++) dots += '<span class="pin-dot' + (i < state.pin.length ? ' filled' : '') + '"></span>';
       var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'change', '0', 'del'].map(function (k) {
-        if (k === 'change') return '<button type="button" class="key key-fn" data-key="change">เปลี่ยน<br>ผู้ใช้</button>';
-        if (k === 'del') return '<button type="button" class="key key-fn" data-key="del" aria-label="ลบ">ลบ</button>';
+        if (k === 'change') return '<button type="button" class="key key-fn" data-key="change">' + App.t('switchUser') + '</button>';
+        if (k === 'del') return '<button type="button" class="key key-fn" data-key="del" aria-label="' + App.t('del') + '">' + App.t('del') + '</button>';
         return '<button type="button" class="key" data-key="' + k + '">' + k + '</button>';
       }).join('');
       return '<div class="text-center">' +
-          '<div class="text-sm text-gray-500">' + (state.firstName ? 'สวัสดี' : 'รหัสพนักงาน') + '</div>' +
-          '<div class="text-xl font-bold text-brand-900">' + App.esc(state.firstName ? ('คุณ' + state.firstName) : state.id) + '</div>' +
-          '<div class="text-sm text-gray-500 mt-3">กรอก PIN 6 หลัก</div>' +
-          '<div id="pin-dots" class="pin-dots" aria-live="polite" aria-label="กรอกแล้ว ' + state.pin.length + ' จาก 6 หลัก">' + dots + '</div>' +
-          '<div id="pin-status" class="text-xs text-gray-400 h-4 mb-3">' + (state.busy ? 'กำลังตรวจสอบ...' : '') + '</div>' +
+          '<div class="text-sm text-gray-500">' + (state.firstName ? App.t('hello') : App.t('employeeId')) + '</div>' +
+          '<div class="text-xl font-bold text-brand-900">' + App.esc(state.firstName ? App.t('helloName', { name: state.firstName }) : state.id) + '</div>' +
+          '<div class="text-sm text-gray-500 mt-3">' + App.t('enterPin') + '</div>' +
+          '<div id="pin-dots" class="pin-dots" aria-live="polite" aria-label="' + App.t('pinProgress', { n: state.pin.length }) + '">' + dots + '</div>' +
+          '<div id="pin-status" class="text-xs text-gray-400 h-4 mb-3">' + (state.busy ? App.t('checking') : '') + '</div>' +
         '</div>' +
         '<div class="keypad">' + keys + '</div>';
     }
@@ -106,9 +108,9 @@
         var dotsEl = document.getElementById('pin-dots');
         if (dotsEl) dotsEl.classList.add('pin-shake');
         App.toast(err.message, 'error');
-        if (/ไม่ถูกต้อง/.test(err.message) && !state.firstName) {
+        if (/ไม่ถูกต้อง|Incorrect/.test(err.message) && !state.firstName) {
           // อาจพิมพ์รหัสพนักงานผิด ให้กลับไปแก้ได้ง่าย
-          document.getElementById('pin-status').innerHTML = '<button type="button" id="fix-id" class="text-brand-600 underline">แก้ไขรหัสพนักงาน</button>';
+          document.getElementById('pin-status').innerHTML = '<button type="button" id="fix-id" class="text-brand-600 underline">' + App.t('fixId') + '</button>';
           document.getElementById('fix-id').onclick = function () { state.step = 'id'; render(); };
         }
       });
@@ -181,7 +183,7 @@
     App.session.clear();
     App.closeModal();
     if (s) App.api('logout', s.token).catch(function () {});
-    if (!silent) App.toast('ออกจากระบบแล้ว', 'info');
+    if (!silent) App.toast(App.t('loggedOut'), 'info');
     App.router.go('/login');
   };
 
@@ -189,25 +191,29 @@
   App.showPdpaModal = function () {
     return new Promise(function (resolve, reject) {
       App.api('getPdpaNotice').catch(function () { return { schoolName: 'โรงเรียนจุนวิทยาคม', contact: 'ฝ่ายการเงินของโรงเรียน' }; }).then(function (n) {
+        var vars = { school: App.esc(n.schoolName), contact: App.esc(n.contact) };
         App.modalHtml(
-          '<div class="flex items-center gap-2 mb-3"><span class="w-6 h-6 text-brand-600">' + App.icon('shield') + '</span>' +
-            '<h3 class="text-lg font-bold">ประกาศความเป็นส่วนตัว (PDPA)</h3></div>' +
+          '<div class="flex items-center justify-between gap-2 mb-3"><div class="flex items-center gap-2"><span class="w-6 h-6 text-brand-600">' + App.icon('shield') + '</span>' +
+            '<h3 class="text-lg font-bold">' + App.t('pdpaTitle') + '</h3></div>' + (App.config.mode === 'employee' ? App.langToggle() : '') + '</div>' +
           '<div class="text-sm text-gray-700 space-y-2 max-h-[50vh] overflow-y-auto pr-1">' +
-            '<p>' + App.esc(n.schoolName) + ' ในฐานะผู้ควบคุมข้อมูลส่วนบุคคล เก็บและใช้ข้อมูลของท่านตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 ดังนี้</p>' +
+            '<p>' + App.t('pdpaIntro', vars) + '</p>' +
             '<ul class="list-disc pl-5 space-y-1">' +
-              '<li><b>ข้อมูลที่ใช้:</b> ชื่อ-สกุล ตำแหน่ง เลขที่บัญชีธนาคาร เลขประจำตัวประชาชน ข้อมูลเงินเดือนและรายการหัก</li>' +
-              '<li><b>วัตถุประสงค์:</b> จ่ายค่าจ้าง ออกสลิปเงินเดือน นำส่งประกันสังคม และรายงานต่อหน่วยงานต้นสังกัด</li>' +
-              '<li><b>ฐานทางกฎหมาย:</b> การปฏิบัติตามสัญญาจ้างและหน้าที่ตามกฎหมาย</li>' +
-              '<li><b>การเข้าถึง:</b> เฉพาะเจ้าหน้าที่การเงินที่ได้รับมอบหมาย ทุกการเข้าถึงถูกบันทึกไว้ตรวจสอบได้</li>' +
-              '<li><b>สิทธิของท่าน:</b> ขอเข้าถึง ขอสำเนา ขอแก้ไขข้อมูลให้ถูกต้อง โดยติดต่อ ' + App.esc(n.contact) + '</li>' +
+              ['pdpaData', 'pdpaPurpose', 'pdpaBasis', 'pdpaAccess', 'pdpaRights'].map(function (k) { return '<li>' + App.t(k, vars) + '</li>'; }).join('') +
             '</ul>' +
           '</div>' +
-          '<label class="flex items-start gap-2 mt-4 text-sm"><input type="checkbox" id="pdpa-ok" class="mt-1"> ข้าพเจ้าได้อ่านและรับทราบประกาศนี้แล้ว</label>' +
+          '<label class="flex items-start gap-2 mt-4 text-sm"><input type="checkbox" id="pdpa-ok" class="mt-1"> ' + App.t('pdpaAck') + '</label>' +
           '<div class="flex justify-end gap-2 pt-4">' +
-            '<button type="button" id="pdpa-no" class="btn btn-secondary">ออกจากระบบ</button>' +
-            '<button type="button" id="pdpa-yes" class="btn btn-primary" disabled>ยอมรับและดำเนินการต่อ</button>' +
+            '<button type="button" id="pdpa-no" class="btn btn-secondary">' + App.t('logout') + '</button>' +
+            '<button type="button" id="pdpa-yes" class="btn btn-primary" disabled>' + App.t('pdpaAccept') + '</button>' +
           '</div>'
         );
+        document.getElementById('modal-root').querySelectorAll('.lang-btn').forEach(function (btn) {
+          btn.onclick = function () {
+            App.lang = btn.getAttribute('data-lang');
+            App.store.set('cwk_lang', App.lang);
+            App.showPdpaModal().then(resolve, reject);
+          };
+        });
         var yes = document.getElementById('pdpa-yes');
         document.getElementById('pdpa-ok').onchange = function () { yes.disabled = !this.checked; };
         document.getElementById('pdpa-no').onclick = function () { reject(new Error('declined')); };
@@ -227,17 +233,17 @@
       : 'type="password" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="new-password"';
     return new Promise(function (resolve, reject) {
       App.modalHtml(
-        '<h3 class="text-lg font-bold mb-1">' + (forced ? 'ตั้งรหัสผ่านใหม่ก่อนใช้งาน' : (isAdmin ? 'เปลี่ยนรหัสผ่าน' : 'เปลี่ยน PIN')) + '</h3>' +
+        '<h3 class="text-lg font-bold mb-1">' + (forced ? App.t('setNewPin') : (isAdmin ? 'เปลี่ยนรหัสผ่าน' : App.t('changePin'))) + '</h3>' +
         '<p class="text-sm text-gray-500 mb-4">' + (isAdmin
           ? 'รหัสผ่านใหม่อย่างน้อย 8 ตัวอักษร ผสมตัวอักษรและตัวเลข'
-          : 'PIN ใหม่เป็นตัวเลข 6 หลัก ห้ามเรียงกัน (123456) ห้ามซ้ำกันทั้งหมด (111111) และห้ามใช้เลขบัตรประชาชน') + '</p>' +
+          : App.t('pinRule')) + '</p>' +
         '<form id="pin-form" class="space-y-3">' +
-          '<div><label class="label" for="pin-old">' + (forced ? 'รหัสที่ได้รับจากเจ้าหน้าที่ / รหัสปัจจุบัน' : 'รหัสปัจจุบัน') + '</label><input id="pin-old" class="input" ' + attrs.replace('new-password', 'current-password') + ' required></div>' +
-          '<div><label class="label" for="pin-new">รหัสใหม่</label><input id="pin-new" class="input" ' + attrs + ' required></div>' +
-          '<div><label class="label" for="pin-new2">ยืนยันรหัสใหม่</label><input id="pin-new2" class="input" ' + attrs + ' required></div>' +
+          '<div><label class="label" for="pin-old">' + (forced ? App.t('currentPinTemp') : App.t('currentPin')) + '</label><input id="pin-old" class="input" ' + attrs.replace('new-password', 'current-password') + ' required></div>' +
+          '<div><label class="label" for="pin-new">' + App.t('newPin') + '</label><input id="pin-new" class="input" ' + attrs + ' required></div>' +
+          '<div><label class="label" for="pin-new2">' + App.t('confirmPin') + '</label><input id="pin-new2" class="input" ' + attrs + ' required></div>' +
           '<div class="flex justify-end gap-2 pt-2">' +
-            '<button type="button" id="pin-cancel" class="btn btn-secondary">' + (forced ? 'ออกจากระบบ' : 'ยกเลิก') + '</button>' +
-            '<button type="submit" class="btn btn-primary">บันทึก</button></div>' +
+            '<button type="button" id="pin-cancel" class="btn btn-secondary">' + (forced ? App.t('logout') : App.t('cancel')) + '</button>' +
+            '<button type="submit" class="btn btn-primary">' + App.t('save') + '</button></div>' +
         '</form>', 'max-w-md'
       );
       document.getElementById('pin-old').focus();
@@ -249,11 +255,11 @@
         ev.preventDefault();
         var oldPin = document.getElementById('pin-old').value;
         var newPin = document.getElementById('pin-new').value;
-        if (newPin !== document.getElementById('pin-new2').value) { App.toast('รหัสใหม่ทั้งสองช่องไม่ตรงกัน', 'error'); return; }
+        if (newPin !== document.getElementById('pin-new2').value) { App.toast(App.t('pinMismatch'), 'error'); return; }
         var btn = ev.target.querySelector('button[type=submit]');
         btn.disabled = true;
         App.call('changeMyPin', oldPin, newPin).then(function () {
-          App.toast('เปลี่ยนรหัสผ่านเรียบร้อย', 'success');
+          App.toast(App.t('pinChanged'), 'success');
           App.closeModal();
           resolve(true);
         }).catch(function (err) {

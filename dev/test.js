@@ -258,9 +258,136 @@ test('สรุปรายปี, ข้อมูลส่วนตัวแบ
   ['LOGIN', 'ADD_EMPLOYEE', 'PDPA_ACCEPT', 'CHANGE_PIN', 'CREATE_RUN', 'APPROVE_RUN'].forEach((a) => {
     assert.ok(log.some((l) => l.action === a), 'missing audit ' + a);
   });
-  const memo = ok(rt.call('getApprovalMemo', token, '2026-08'));
-  assert.strictEqual(memo.lines[0].amount, 10000 - 500);
-  assert.strictEqual(ok(rt.call('getBankTransferList', token, '2026-08')).list[0].bankAccountNo, '020229452329');
+  const docs = ok(rt.call('getDisbursementDocs', token, '2026-08'));
+  assert.strictEqual(docs.memoLines[0].amount, 10000 - 500);
+  assert.strictEqual(docs.lines[0].bankAccountNo, '020229452329');
+});
+
+console.log('\nวันที่จ่ายเงินเดือน');
+test('อนุมัติพร้อมระบุวันที่จ่าย, ค่าตั้งต้นเป็นวันทำการสุดท้าย, แก้วันที่จ่ายได้เฉพาะรอบที่อนุมัติ', () => {
+  const { rt, token } = bootstrap();
+  const e = addEmp(rt, token, 'Cwk001', 10000);
+  const emp = employeeSession(rt, 'Cwk001', e.initialPin, '482915');
+  const may = ok(rt.call('getOrCreatePayrollRun', token, '2026-05'));
+  assert.strictEqual(may.defaultPaidDate, '2026-05-29');
+  fails(rt.call('setPayrollPaidDate', token, '2026-05', '2026-05-28'), /เฉพาะรอบที่อนุมัติ/);
+  fails(rt.call('approvePayrollRun', token, '2026-05', '2026-02-30'), /วันที่จ่ายไม่ถูกต้อง/);
+  ok(rt.call('approvePayrollRun', token, '2026-05', '2026-05-27'));
+  assert.strictEqual(ok(rt.call('getMyPayslip', emp, '2026-05')).paidDate, '2026-05-27');
+  ok(rt.call('setPayrollPaidDate', token, '2026-05', '2026-05-28'));
+  assert.strictEqual(ok(rt.call('getPayrollRun', token, '2026-05')).paidDate, '2026-05-28');
+  ok(rt.call('getOrCreatePayrollRun', token, '2026-06'));
+  ok(rt.call('approvePayrollRun', token, '2026-06'));
+  assert.strictEqual(ok(rt.call('getPayrollRun', token, '2026-06')).paidDate, '2026-06-30');
+});
+
+console.log('\nนำเข้าข้อมูลย้อนหลังจาก Excel');
+// ชีตจำลองที่จัดวางแบบเดียวกับไฟล์ "เงินเดือน" ของโรงเรียน (ชื่อสมมติ ตัวเลขจากไฟล์ตัวอย่าง)
+const SALARY_SHEET = [
+  [],
+  ['หลักฐานการจ่ายค่าจ้างสอนและค่าจ้างอื่นของบุคลากรทางการศึกษา  โรงเรียนจุนวิทยาคม'],
+  ['ประจำเดือนกันยายน 2569 ประจำปีงบประมาณ 2569 (ตั้งแต่วันที่ 1 ตุลาคม พ.ศ. 2568 ถึง 30 กันยายน พ.ศ. 2569)'],
+  ['ลำดับ', 'ชื่อ-สกุล', '', 'รายรับ', '', '', '', '', 'รายจ่าย', '', '', '', 'คงเหลือ', 'สมทบ ปกส. ร.ร.', 'สมทบ ทดแทน ร.ร.', 'ลายมือชื่อ', 'หมายเลขบัญชี'],
+  ['', '', '', 'เงินเดือน', 'ปรับฐาน', 'เงินเพิ่มพิเศษ', ' (ตกเบิก เม.ย)', 'รวมรับ', 'ปกส.', 'กองทุนเงินทดแทน', 'อื่นๆ', 'รวมหัก', '', '', '', '', ''],
+  [1, 'นายสมชาย', 'ใจดี', 12050, '', 1000, '', 13050, 603, 0, 2700, 3303, 9747, 603, '', '', '020229452329'],
+  [2, 'Mr.John', 'Smith', 29450, '', '', '', 29450, 875, 0, 0, 875, 28575, 875, '', '', '020361080680'],
+  [3, 'นางสาวสมหญิง ', 'รักเรียน', 10300, '', '', '', 10300, 0, 0, 200, 200, 10100, 0, '', '', '020235832456'],
+  [4, 'ว่าที่พ.ต.วิชัย', 'ขยันงาน', 11950, '', '', '', 11950, 598, 0, 200, 798, 11152, 598, '', '', '020134503364'],
+  ['รวม', '', '', 63750, 0, 1000, 0, 64750, 2076, 0, 3100, 5176, 59574, 2076, 0],
+  [],
+  ['', '**หมายเหตุ**', '1.ค่าจ้างรายเดือน (เงินเดือน+ปรับฐาน)', '', '', '', 63750, 'บาท']
+];
+
+function importAll(rt, token, sheets, month, paidDate, extra) {
+  const pv = ok(rt.call('previewPayrollImport', token, { sheets }));
+  const assignments = {};
+  pv.lines.forEach((l) => { if (!l.match) assignments[l.rowNo] = '__new__'; });
+  return { pv, res: rt.call('commitPayrollImport', token, Object.assign({ sheets, sheetIndex: pv.sheetIndex, fileName: 'test.xlsx', month: month || pv.month, paidDate, assignments }, extra || {})) };
+}
+
+test('อ่านไฟล์แบบ "เงินเดือน": หัวตาราง 2 แถว, ชื่อ-สกุล 2 คอลัมน์, คำนำหน้า, เดือนจากหัวเอกสาร, หยุดที่แถวรวม', () => {
+  const { rt, token } = bootstrap();
+  const pv = ok(rt.call('previewPayrollImport', token, { sheets: [{ name: 'เงินเดือน', rows: SALARY_SHEET }] }));
+  assert.strictEqual(pv.month, '2026-09');
+  assert.strictEqual(pv.headerRow, 4);
+  assert.strictEqual(pv.lines.length, 4);
+  assert.deepStrictEqual(pv.lines.map((l) => l.prefix + '|' + l.firstName + '|' + l.lastName),
+    ['นาย|สมชาย|ใจดี', 'Mr.|John|Smith', 'นางสาว|สมหญิง|รักเรียน', 'ว่าที่พ.ต.|วิชัย|ขยันงาน']);
+  assert.strictEqual(pv.totals.net, 59574);
+  assert.ok(pv.lines.every((l) => !l.warnings.length));
+  assert.strictEqual(pv.defaultPaidDate, '2026-09-30');
+});
+
+test('นำเข้าแล้วได้รอบจ่ายที่อนุมัติ วันที่จ่ายตามที่ระบุ ยอดตามไฟล์ และเอกสารเบิกจ่ายกระทบยอดตรงกัน', () => {
+  const { rt, token } = bootstrap();
+  const { res } = importAll(rt, token, [{ name: 'เงินเดือน', rows: SALARY_SHEET }], null, '2026-09-30');
+  const r = ok(res);
+  assert.strictEqual(r.imported, 4);
+  assert.deepStrictEqual(r.created.map((c) => c.employeeId), ['Cwk001', 'Cwk002', 'Cwk003', 'Cwk004']);
+  const run = ok(rt.call('getPayrollRun', token, '2026-09'));
+  assert.strictEqual(run.status, 'approved');
+  assert.strictEqual(run.paidDate, '2026-09-30');
+  const john = run.lines.find((l) => l.fullName.includes('John'));
+  assert.strictEqual(john.ssoEmployee, 875); // ใช้ยอดจากไฟล์ ไม่คำนวณใหม่ตามเพดาน
+  assert.strictEqual(john.bankAccountNo, '020361080680');
+  const d = ok(rt.call('getDisbursementDocs', token, '2026-09'));
+  assert.strictEqual(d.summary.grandTotal, 63750 + 1000 + 2076);
+  assert.strictEqual(d.totals.netPay, 59574);
+  assert.strictEqual(d.summary.reconciles, true);
+  assert.strictEqual(d.memoLines.reduce((s, l) => s + l.amount, 0), d.summary.grandTotal);
+  assert.strictEqual(d.paidDateLabel, '30 กันยายน พ.ศ. 2569');
+  assert.match(d.fiscalRangeText, /1 ตุลาคม พ.ศ. 2568 ถึง 30 กันยายน พ.ศ. 2569/);
+  const history = ok(rt.call('listSalaryHistory', token, 'Cwk001'));
+  assert.strictEqual(history[0].baseSalary, 12050);
+});
+
+test('นำเข้าซ้ำเดือนเดิมต้องเลือกแทนที่ และแทนที่แล้วไม่มีข้อมูลซ้ำ', () => {
+  const { rt, token } = bootstrap();
+  const sheets = [{ name: 'เงินเดือน', rows: SALARY_SHEET }];
+  ok(importAll(rt, token, sheets, null, '2026-09-30').res);
+  fails(importAll(rt, token, sheets, null, '2026-09-30').res, /แทนที่ข้อมูลเดิม/);
+  ok(importAll(rt, token, sheets, null, '2026-09-29', { replace: true }).res);
+  const run = ok(rt.call('getPayrollRun', token, '2026-09'));
+  assert.strictEqual(run.lines.length, 4);
+  assert.strictEqual(run.paidDate, '2026-09-29');
+  const docs = ok(rt.call('getDisbursementDocs', token, '2026-09'));
+  assert.strictEqual(docs.categorySums['อื่นๆ'], 3100);
+});
+
+test('ไฟล์แบบ SlipSheet: เดือนจากปี พ.ศ. ในช่องวันที่, จับคู่ด้วยรหัสเมื่อชื่อตรง, รหัสขัดแย้งถูกเตือนและจับคู่ด้วยชื่อแทน', () => {
+  const { rt, token } = bootstrap();
+  ok(importAll(rt, token, [{ name: 'เงินเดือน', rows: SALARY_SHEET }], null, '2026-09-30').res);
+  const slip = [
+    ['ลำดับ', 'ประจำเดือน', 'รหัสพนักงาน', 'คำนำหน้า', 'ชื่อ', 'นามสกุล', 'เงินเดือน', 'เงินประจำตำแหน่ง', 'ค่าขึ้นเวร', 'รับอื่นๆ', 'รวมรับ',
+      'ประกันสังคม', 'กองทุนทดแทน', 'หักอื่นๆ', 'รวมหัก', 'คงเหลือ', 'นายจ้างสมทบประกันสังคม', 'หมายเลขบัญชี', 'ชื่อตำแหน่ง', 'หมายเหตุ1', 'สุทธิตัวอักษร'],
+    [1, '2568-06-28', 'Cwk001', 'นาย', 'สมชาย', 'ใจดี', 11200, 0, 0, '-', 11200, 560, 0, 0, 560, 10640, 560, '020229452329', 'ครูอัตราจ้าง', '- ประกันสังคม 5 %', '(...)'],
+    [2, '2568-06-28', 'Cwk002', 'นางสาว', 'สมหญิง', 'รักเรียน', 9500, 0, 0, '-', 9500, '-', 0, 0, 0, 9500, '-', '020235832456', 'เจ้าหน้าที่', '', ''],
+    [3, '2568-06-28', 'Cwk050', 'นาง', 'มาลี', 'สวยงาม', 9000, 0, 300, '-', 9300, '-', 0, 0, 0, 9999, '-', '020999999999', 'แม่บ้าน', '', '']
+  ];
+  const pv = ok(rt.call('previewPayrollImport', token, { sheets: [{ name: 'SlipSheet', rows: slip }] }));
+  assert.strictEqual(pv.month, '2025-06');
+  const [a, b, c] = pv.lines;
+  assert.strictEqual(a.match.employeeId, 'Cwk001');
+  assert.strictEqual(a.match.by, 'รหัสพนักงาน');
+  assert.strictEqual(b.match.employeeId, 'Cwk003');
+  assert.ok(b.warnings.some((w) => /ไม่ใช่คนในแถวนี้/.test(w)));
+  assert.strictEqual(c.match, null);
+  assert.ok(c.warnings.some((w) => /คงเหลือในไฟล์/.test(w)));
+  const res = ok(rt.call('commitPayrollImport', token, { sheets: [{ name: 'SlipSheet', rows: slip }], month: '2025-06', paidDate: '2025-06-30',
+    assignments: { 4: '__new__' }, newEmployeeStatus: 'inactive' }));
+  assert.deepStrictEqual(res.created.map((x) => x.employeeId), ['Cwk050']);
+  const all = ok(rt.call('listEmployees', token, true));
+  assert.strictEqual(all.find((x) => x.employeeId === 'Cwk050').status, 'inactive');
+  const june = ok(rt.call('getPayrollRun', token, '2025-06'));
+  assert.strictEqual(june.lines.find((l) => l.employeeId === 'Cwk050').onDutyPay, 300);
+});
+
+test('นำเข้า: ห้ามเลือกลูกจ้างซ้ำ 2 แถว และต้องเลือกแถวที่จับคู่ไม่ได้', () => {
+  const { rt, token } = bootstrap();
+  const sheets = [{ name: 'เงินเดือน', rows: SALARY_SHEET }];
+  fails(rt.call('commitPayrollImport', token, { sheets, month: '2026-09', paidDate: '2026-09-30', assignments: {} }), /ยังไม่ได้เลือกลูกจ้าง/);
+  ok(importAll(rt, token, sheets, null, '2026-09-30').res);
+  fails(rt.call('commitPayrollImport', token, { sheets, month: '2026-08', paidDate: '2026-08-31', assignments: { 7: 'Cwk001' } }), /ถูกเลือกซ้ำ/);
 });
 
 console.log('\n' + passed + ' ผ่าน, ' + failures.length + ' ไม่ผ่าน');

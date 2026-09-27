@@ -1,129 +1,6 @@
 /**
- * Reports.gs — รายงานสรุป (บันทึกข้อความขออนุมัติ, ใบโอนเงินธนาคาร) และข้อมูลสลิปเงินเดือนรายบุคคล
+ * Reports.gs — ข้อมูลสลิปเงินเดือนรายบุคคล, การตรวจสอบสลิป, สรุปรายปี, แดชบอร์ด และประวัติการใช้งาน
  */
-
-var DEDUCTION_CATEGORY_LABEL = {
-  'เงินยืม': 'หักคืนเงินยืม',
-  'เกษียณ': 'ค่างานเลี้ยงเกษียณ',
-  'อื่นๆ': 'รายการหักอื่นๆ'
-};
-
-function getBankTransferList(token, month) {
-  try {
-    requireAuth_(token, ['admin']);
-    var rows = findAll_(SHEET_NAMES.PAYROLL_RUNS, 'Month', month);
-    if (!rows.length) return apiError('ยังไม่มีรอบจ่ายของเดือนนี้');
-    var employeesById = {};
-    readAll_(SHEET_NAMES.EMPLOYEES).forEach(function (e) { employeesById[e.EmployeeID] = e; });
-
-    var list = rows.map(function (r) {
-      var emp = employeesById[r.EmployeeID] || {};
-      return {
-        employeeId: r.EmployeeID, fullName: fullNameOf_(emp),
-        bankName: emp.BankName || '', bankAccountNo: emp.BankAccountNo || '', netPay: Number(r.NetPay)
-      };
-    }).sort(function (a, b) { return String(a.employeeId).localeCompare(String(b.employeeId), 'en', { numeric: true }); });
-
-    var total = round2(list.reduce(function (s, x) { return s + x.netPay; }, 0));
-    var settings = getSettings_();
-    return apiOk({
-      month: month, monthLabel: formatThaiMonthLong(month),
-      schoolName: settings.SchoolName, list: list, total: total, totalText: bahtText(total),
-      approved: rows.every(function (r) { return r.Status === 'approved'; })
-    });
-  } catch (e) {
-    return apiError(e.message);
-  }
-}
-
-function getApprovalMemo(token, month) {
-  try {
-    requireAuth_(token, ['admin']);
-    var rows = findAll_(SHEET_NAMES.PAYROLL_RUNS, 'Month', month);
-    if (!rows.length) return apiError('ยังไม่มีรอบจ่ายของเดือนนี้');
-    var deductions = findAll_(SHEET_NAMES.PAYROLL_DEDUCTIONS, 'Month', month);
-    var settings = getSettings_();
-
-    var totalBaseSalary = 0, totalPositionAllowance = 0, totalOnDutyPay = 0, totalOtherIncome = 0, totalBackPay = 0, totalSSOEmployee = 0, totalSSOEmployer = 0, totalCompFundEmployer = 0;
-    rows.forEach(function (r) {
-      totalBaseSalary += Number(r.BaseSalary);
-      totalPositionAllowance += Number(r.PositionAllowance);
-      totalOnDutyPay += Number(r.OnDutyPay);
-      totalOtherIncome += Number(r.OtherIncome);
-      totalBackPay += Number(r.BackPay);
-      totalSSOEmployee += Number(r.SSOEmployee);
-      totalSSOEmployer += Number(r.SSOEmployer);
-      totalCompFundEmployer += Number(r.CompFundEmployer);
-    });
-    var totalNetPay = round2(rows.reduce(function (s, r) { return s + Number(r.NetPay); }, 0));
-
-    var categorySums = {};
-    deductions.forEach(function (d) {
-      categorySums[d.Category] = (categorySums[d.Category] || 0) + Number(d.Amount);
-    });
-
-    var lines = [];
-    lines.push({
-      no: 1,
-      description: 'ค่าจ้างลูกจ้างชั่วคราว เดือน' + formatThaiMonthLong(month),
-      amount: totalNetPay,
-      note: 'โอนผ่านธนาคาร'
-    });
-
-    var ssoCashAmount = round2(totalSSOEmployee + totalSSOEmployer + (categorySums['เงินยืม'] || 0));
-    lines.push({
-      no: 2,
-      description: 'ค่าประกันสังคม',
-      amount: ssoCashAmount,
-      note: 'เบิกเงินสด'
-    });
-
-    var lineNo = 3;
-    Object.keys(categorySums).forEach(function (cat) {
-      if (cat === 'เงินยืม') return; // รวมอยู่ในรายการที่ 2 แล้ว
-      if (categorySums[cat] <= 0) return;
-      lines.push({
-        no: lineNo++,
-        description: DEDUCTION_CATEGORY_LABEL[cat] || cat,
-        amount: round2(categorySums[cat]),
-        note: 'เบิกเงินสด'
-      });
-    });
-
-    var grandTotal = round2(lines.reduce(function (s, l) { return s + l.amount; }, 0));
-
-    return apiOk({
-      month: month,
-      monthLabel: formatThaiMonthLong(month),
-      schoolName: settings.SchoolName,
-      schoolAddress: settings.SchoolAddress,
-      lines: lines,
-      grandTotal: grandTotal,
-      grandTotalText: bahtText(grandTotal),
-      breakdown: {
-        totalBaseSalary: round2(totalBaseSalary),
-        totalPositionAllowance: round2(totalPositionAllowance),
-        totalOnDutyPay: round2(totalOnDutyPay),
-        totalOtherIncome: round2(totalOtherIncome),
-        totalBackPay: round2(totalBackPay),
-        totalGrossIncome: round2(totalBaseSalary + totalPositionAllowance + totalOnDutyPay + totalOtherIncome + totalBackPay),
-        totalSSOEmployee: round2(totalSSOEmployee),
-        totalSSOEmployer: round2(totalSSOEmployer),
-        totalCompFundEmployer: round2(totalCompFundEmployer),
-        totalNetPay: totalNetPay,
-        categorySums: categorySums
-      },
-      signers: {
-        financeOfficerName: settings.FinanceOfficerName, financeOfficerTitle: settings.FinanceOfficerTitle,
-        budgetHeadName: settings.BudgetHeadName, budgetHeadTitle: settings.BudgetHeadTitle,
-        deputyDirectorName: settings.DeputyDirectorName, deputyDirectorTitle: settings.DeputyDirectorTitle,
-        directorName: settings.DirectorName, directorTitle: settings.DirectorTitle
-      }
-    });
-  } catch (e) {
-    return apiError(e.message);
-  }
-}
 
 /** รหัสตรวจสอบสลิป (HMAC ของเดือน+รหัสพนักงาน+ยอดเงิน) — ถ้ามีใครแก้ตัวเลขบนสลิป รหัสจะไม่ตรงกับข้อมูลจริง */
 function payslipCode_(run) {
@@ -176,6 +53,7 @@ function buildPayslip_(month, run, emp, deductions) {
     paidDate: run.PaidDate || '',
     paidDateLabel: formatThaiDateShort(run.PaidDate),
     status: run.Status,
+    note: run.Note || '',
     verifyCode: code,
     verifyUrl: code && baseUrl ? (baseUrl + '?verify=' + encodeURIComponent(code)) : ''
   };
@@ -226,7 +104,7 @@ function listMyPayslipMonths(token) {
     var rows = readAll_(SHEET_NAMES.PAYROLL_RUNS)
       .filter(function (r) { return r.EmployeeID === session.employeeId && r.Status === 'approved'; })
       .map(function (r) {
-        return { month: r.Month, monthLabel: formatThaiMonthLong(r.Month), grossPay: Number(r.GrossPay), netPay: Number(r.NetPay), paidDateLabel: formatThaiDateShort(r.PaidDate) };
+        return { month: r.Month, monthLabel: formatThaiMonthLong(r.Month), grossPay: Number(r.GrossPay), netPay: Number(r.NetPay), paidDate: r.PaidDate || '', paidDateLabel: formatThaiDateShort(r.PaidDate) };
       });
     rows.sort(function (a, b) { return compareMonthKey(b.month, a.month); });
     return apiOk(rows);
@@ -302,9 +180,11 @@ function verifyPayslip(code) {
       schoolName: getSetting_('SchoolName', ''),
       name: maskName_(emp),
       position: emp.Position || emp.Group || '',
+      month: match.Month,
       monthLabel: formatThaiMonthLong(match.Month),
       grossPay: Number(match.GrossPay),
       netPay: Number(match.NetPay),
+      paidDate: match.PaidDate || '',
       paidDateLabel: formatThaiDateShort(match.PaidDate)
     });
   } catch (e) {
@@ -364,7 +244,7 @@ var AUDIT_ACTION_LABEL = {
   ADD_EMPLOYEE: 'เพิ่มลูกจ้าง', UPDATE_EMPLOYEE: 'แก้ไขข้อมูลลูกจ้าง', ACTIVATE_EMPLOYEE: 'เปิดใช้งานบัญชี', DEACTIVATE_EMPLOYEE: 'ปิดใช้งานบัญชี',
   SALARY_ADJUST: 'ปรับ/เลื่อนขั้นเงินเดือน', CREATE_RUN: 'สร้างรอบจ่าย', ADD_TO_RUN: 'เพิ่มลูกจ้างเข้ารอบจ่าย', EDIT_PAY_LINE: 'แก้ไขรายการเงินเดือน',
   APPLY_BACKPAY: 'ดึงตกเบิกเข้ารอบจ่าย', ADD_DEDUCTION: 'เพิ่มรายการหัก', REMOVE_DEDUCTION: 'ลบรายการหัก', APPROVE_RUN: 'อนุมัติรอบจ่าย',
-  REOPEN_RUN: 'เปิดรอบจ่ายแก้ไข', PRINT_PAYSLIPS: 'พิมพ์สลิปรวม', UPDATE_SETTINGS: 'แก้ไขการตั้งค่า', VERIFY_PAYSLIP: 'ตรวจสอบสลิปจากภายนอก'
+  REOPEN_RUN: 'เปิดรอบจ่ายแก้ไข', SET_PAID_DATE: 'แก้วันที่จ่าย', IMPORT_PAYROLL: 'นำเข้าเงินเดือนจาก Excel', EXPORT_DOCUMENT: 'ออกเอกสารเบิกจ่าย', PRINT_PAYSLIPS: 'พิมพ์สลิปรวม', UPDATE_SETTINGS: 'แก้ไขการตั้งค่า', VERIFY_PAYSLIP: 'ตรวจสอบสลิปจากภายนอก'
 };
 
 function auditView_(a) {

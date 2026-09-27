@@ -1,0 +1,189 @@
+<script>
+  /**
+   * ภาษาไทย/อังกฤษ สำหรับหน้าบ้าน (ลูกจ้าง) และหน้าตรวจสอบสลิป
+   * ค่าตั้งต้นตามภาษาของเครื่อง (th → ไทย, อื่น ๆ → อังกฤษ) และจำค่าที่ผู้ใช้เลือกไว้ในเครื่อง
+   * หลังบ้านใช้ภาษาไทยเสมอ
+   */
+  (function () {
+    var KEY = 'cwk_lang';
+    var saved = App.store.get(KEY);
+    var browser = (navigator.language || 'th').toLowerCase().indexOf('th') === 0 ? 'th' : 'en';
+    App.lang = App.config.mode === 'admin' ? 'th' : (saved === 'th' || saved === 'en' ? saved : browser);
+    App.setLang = function (lang) {
+      App.lang = lang === 'en' ? 'en' : 'th';
+      App.store.set(KEY, App.lang);
+      document.documentElement.lang = App.lang;
+      App.router.render();
+    };
+    document.documentElement.lang = App.lang;
+  })();
+
+  var I18N = {
+    appName: ['สลิปเงินเดือนออนไลน์', 'Online Payslip'],
+    school: ['โรงเรียนจุนวิทยาคม อำเภอจุน จังหวัดพะเยา', 'Chun Witthayakhom School, Chun, Phayao'],
+    employeeId: ['รหัสพนักงาน', 'Employee ID'],
+    idPlaceholder: ['เช่น Cwk001', 'e.g. Cwk001'],
+    next: ['ถัดไป', 'Next'],
+    hello: ['สวัสดี', 'Hello'],
+    helloName: ['คุณ{name}', '{name}'],
+    enterPin: ['กรอก PIN 6 หลัก', 'Enter your 6-digit PIN'],
+    pinProgress: ['กรอกแล้ว {n} จาก 6 หลัก', '{n} of 6 digits entered'],
+    switchUser: ['เปลี่ยน<br>ผู้ใช้', 'Switch<br>user'],
+    del: ['ลบ', 'Delete'],
+    checking: ['กำลังตรวจสอบ...', 'Checking...'],
+    forgot: ['ลืม PIN หรือถูกล็อก? ติดต่อฝ่ายการเงินของโรงเรียนเพื่อขอรหัสใหม่', 'Forgot your PIN or locked out? Ask the school finance office for a new one.'],
+    staff: ['สำหรับเจ้าหน้าที่ →', 'Staff sign-in →'],
+    fixId: ['แก้ไขรหัสพนักงาน', 'Change employee ID'],
+    loading: ['กำลังโหลด...', 'Loading...'],
+    menu: ['เมนู', 'Menu'],
+    tabSlip: ['สลิปเงินเดือน', 'Payslips'],
+    tabYear: ['สรุปรายปี', 'Yearly'],
+    tabProfile: ['ข้อมูลของฉัน', 'My info'],
+    changePin: ['เปลี่ยน PIN', 'Change PIN'],
+    logout: ['ออกจากระบบ', 'Sign out'],
+    loggedOut: ['ออกจากระบบแล้ว', 'Signed out'],
+    idleOut: ['ออกจากระบบอัตโนมัติเนื่องจากไม่มีการใช้งาน 15 นาที', 'Signed out after 15 minutes of inactivity'],
+    netPayFor: ['เงินเดือนสุทธิ · {m}', 'Net pay · {m}'],
+    baht: ['บาท', 'THB'],
+    totalEarnings: ['รวมรายรับ', 'Total earnings'],
+    totalDeductions: ['รวมรายการหัก', 'Total deductions'],
+    printPdf: ['พิมพ์ / บันทึกเป็น PDF', 'Print / Save as PDF'],
+    chooseMonth: ['เลือกเดือน', 'Month'],
+    history: ['ประวัติย้อนหลัง', 'History'],
+    paidOn: ['จ่ายเมื่อ {d}', 'Paid {d}'],
+    emptySlip: ['ยังไม่มีสลิปเงินเดือนในระบบ', 'No payslips yet'],
+    emptySlipText: ['สลิปจะแสดงที่นี่ทันทีเมื่อฝ่ายการเงินอนุมัติการจ่ายเงินเดือนของเดือนนั้น', 'Your payslip appears here as soon as the finance office approves that month’s payroll.'],
+    loadFail: ['โหลดข้อมูลไม่สำเร็จ', 'Could not load data'],
+    slipTitle: ['สลิปเงินเดือน — {m}', 'Payslip — {m}'],
+    yearTitle: ['สรุปรายได้ ปี พ.ศ. {y}', 'Income summary {y}'],
+    yearOpt: ['พ.ศ. {be}', '{ce}'],
+    tileGross: ['รายได้รวมทั้งปี', 'Total earnings'],
+    tileGrossNote: ['ก่อนหักรายการใด ๆ', 'before deductions'],
+    tileSso: ['ประกันสังคมที่จ่าย', 'Social security paid'],
+    tileSsoNote: ['ใช้เป็นค่าลดหย่อนภาษีได้', 'tax-deductible in Thailand'],
+    tileNet: ['รับสุทธิทั้งปี', 'Net received'],
+    monthsCount: ['{n} เดือน', '{n} months'],
+    colMonth: ['เดือน', 'Month'],
+    colGross: ['รายรับรวม', 'Earnings'],
+    colSso: ['ปกส.', 'Social sec.'],
+    colNet: ['สุทธิ', 'Net'],
+    printYear: ['พิมพ์หนังสือสรุปรายได้ (ใช้ยื่นภาษี/ยื่นกู้)', 'Print income statement (tax / loan application)'],
+    yearHint: ['ปีภาษีนับตามปีปฏิทิน (ม.ค.–ธ.ค.) ใช้ข้อมูลประกอบการยื่นแบบ ภ.ง.ด.90/91 ได้', 'Thai tax year = calendar year (Jan–Dec). Use for your PND 90/91 personal income tax return.'],
+    emptyYear: ['ยังไม่มีข้อมูลรายได้', 'No income data yet'],
+    emptyYearText: ['สรุปรายได้ทั้งปีจะแสดงเมื่อมีสลิปเงินเดือนที่อนุมัติแล้วอย่างน้อย 1 เดือน', 'The yearly summary appears once at least one payslip has been approved.'],
+    yearDocTitle: ['สรุปรายได้ประจำปี พ.ศ. {y}', 'Income statement {y}'],
+    group: ['กลุ่มงาน', 'Work group'],
+    startDate: ['วันที่เริ่มงาน', 'Start date'],
+    sso: ['ประกันสังคม', 'Social security'],
+    ssoYes: ['เป็นผู้ประกันตน', 'Insured'],
+    ssoNo: ['ไม่ได้หักสมทบ', 'Not enrolled'],
+    citizenId: ['เลขประจำตัวประชาชน', 'National ID / Passport'],
+    bankTitle: ['บัญชีรับเงินเดือน', 'Salary account'],
+    bank: ['ธนาคาร', 'Bank'],
+    accountNo: ['เลขที่บัญชี', 'Account no.'],
+    salaryHistory: ['ประวัติอัตราเงินเดือน', 'Salary history'],
+    effective: ['มีผลตั้งแต่ {m}', 'Effective {m}'],
+    security: ['ความปลอดภัยของบัญชี', 'Account security'],
+    lastLogin: ['เข้าใช้งานล่าสุด', 'Last sign-in'],
+    wrongInfo: ['ข้อมูลไม่ถูกต้อง? แจ้งฝ่ายการเงินของโรงเรียนเพื่อแก้ไข (สิทธิ์ตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล)', 'Something incorrect? Ask the school finance office to correct it (your right under Thailand’s PDPA).'],
+    pdpaTitle: ['ประกาศความเป็นส่วนตัว (PDPA)', 'Privacy notice (PDPA)'],
+    pdpaIntro: ['{school} ในฐานะผู้ควบคุมข้อมูลส่วนบุคคล เก็บและใช้ข้อมูลของท่านตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562 ดังนี้',
+      '{school}, as data controller, collects and uses your personal data under Thailand’s Personal Data Protection Act B.E. 2562 (2019) as follows:'],
+    pdpaData: ['<b>ข้อมูลที่ใช้:</b> ชื่อ-สกุล ตำแหน่ง เลขที่บัญชีธนาคาร เลขประจำตัวประชาชน ข้อมูลเงินเดือนและรายการหัก', '<b>Data:</b> name, position, bank account, national ID/passport, salary and deductions'],
+    pdpaPurpose: ['<b>วัตถุประสงค์:</b> จ่ายค่าจ้าง ออกสลิปเงินเดือน นำส่งประกันสังคม และรายงานต่อหน่วยงานต้นสังกัด', '<b>Purpose:</b> paying wages, issuing payslips, social security filing and reporting to the supervising authority'],
+    pdpaBasis: ['<b>ฐานทางกฎหมาย:</b> การปฏิบัติตามสัญญาจ้างและหน้าที่ตามกฎหมาย', '<b>Legal basis:</b> performance of your employment contract and legal obligations'],
+    pdpaAccess: ['<b>การเข้าถึง:</b> เฉพาะเจ้าหน้าที่การเงินที่ได้รับมอบหมาย ทุกการเข้าถึงถูกบันทึกไว้ตรวจสอบได้', '<b>Access:</b> authorised finance staff only; every access is logged'],
+    pdpaRights: ['<b>สิทธิของท่าน:</b> ขอเข้าถึง ขอสำเนา ขอแก้ไขข้อมูลให้ถูกต้อง โดยติดต่อ {contact}', '<b>Your rights:</b> access, obtain a copy of, and correct your data — contact {contact}'],
+    pdpaAck: ['ข้าพเจ้าได้อ่านและรับทราบประกาศนี้แล้ว', 'I have read and acknowledge this notice'],
+    pdpaAccept: ['ยอมรับและดำเนินการต่อ', 'Accept and continue'],
+    setNewPin: ['ตั้งรหัสผ่านใหม่ก่อนใช้งาน', 'Set your own PIN to continue'],
+    pinRule: ['PIN ใหม่เป็นตัวเลข 6 หลัก ห้ามเรียงกัน (123456) ห้ามซ้ำกันทั้งหมด (111111) และห้ามใช้เลขบัตรประชาชน', 'Your new PIN must be 6 digits — not sequential (123456), not repeated (111111) and not your national ID.'],
+    currentPinTemp: ['รหัสที่ได้รับจากเจ้าหน้าที่ / รหัสปัจจุบัน', 'Temporary PIN from the office / current PIN'],
+    currentPin: ['รหัสปัจจุบัน', 'Current PIN'],
+    newPin: ['รหัสใหม่', 'New PIN'],
+    confirmPin: ['ยืนยันรหัสใหม่', 'Confirm new PIN'],
+    pinMismatch: ['รหัสใหม่ทั้งสองช่องไม่ตรงกัน', 'The new PINs do not match'],
+    pinChanged: ['เปลี่ยนรหัสผ่านเรียบร้อย', 'Your PIN has been changed'],
+    cancel: ['ยกเลิก', 'Cancel'],
+    save: ['บันทึก', 'Save'],
+    back: ['← กลับ', '← Back'],
+    printTip: ['เคล็ดลับ: ในหน้าต่างพิมพ์ เลือกปลายทาง "บันทึกเป็น PDF" เพื่อเก็บไฟล์ไว้ในเครื่อง', 'Tip: choose “Save as PDF” as the printer to keep a file copy.'],
+    verifyTitle: ['ตรวจสอบความถูกต้องของสลิปเงินเดือน', 'Payslip verification'],
+    verifyCode: ['รหัสตรวจสอบ', 'Verification code'],
+    verifyBtn: ['ตรวจสอบ', 'Verify'],
+    verifying: ['กำลังตรวจสอบ...', 'Verifying...'],
+    verifyValid: ['✓ สลิปนี้ออกโดย{school} และข้อมูลถูกต้อง', '✓ Genuine payslip issued by {school}'],
+    verifyInvalid: ['✕ ไม่พบสลิปที่ตรงกับรหัสนี้', '✕ No payslip matches this code'],
+    verifyInvalidText: ['รหัสไม่ถูกต้อง หรือสลิปถูกแก้ไข/ยกเลิก กรุณาติดต่อฝ่ายการเงินของโรงเรียน', 'The code is wrong, or the payslip was altered or cancelled. Please contact the school finance office.'],
+    verifyNote: ['ระบบแสดงยอดเงินจากฐานข้อมูลจริงของโรงเรียน หากตัวเลขบนเอกสารที่ได้รับไม่ตรงกับหน้านี้ แสดงว่าเอกสารอาจถูกแก้ไข',
+      'Amounts shown come from the school’s own records. If the figures on the document you received differ, the document may have been altered.'],
+    vName: ['ชื่อ', 'Name'], vPosition: ['ตำแหน่ง', 'Position'], vMonth: ['ประจำเดือน', 'Pay period'],
+    vGross: ['รวมรายรับ', 'Gross pay'], vNet: ['รับสุทธิ', 'Net pay'], vPaid: ['วันที่จ่าย', 'Paid on'], vCode: ['รหัส', 'Code']
+  };
+
+  /** ข้อความตามภาษาปัจจุบัน แทน {ตัวแปร} ด้วยค่าใน vars */
+  App.t = function (key, vars) {
+    var pair = I18N[key];
+    var s = pair ? pair[App.lang === 'en' ? 1 : 0] : key;
+    if (vars) Object.keys(vars).forEach(function (k) { s = s.split('{' + k + '}').join(vars[k]); });
+    return s;
+  };
+
+  var EN_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var EN_MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var TH_MONTHS_SHORT = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+  /** "2026-09" -> "กันยายน 2569" / "September 2026" */
+  App.monthName = function (key, lang) {
+    var p = String(key || '').split('-');
+    if (p.length < 2) return '';
+    var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1;
+    return (lang || App.lang) === 'en' ? EN_MONTHS[m] + ' ' + y : App.THAI_MONTHS[m] + ' ' + (y + 543);
+  };
+
+  /** "2026-09-30" -> "30 ก.ย. 2569" / "30 Sep 2026" */
+  App.dateShort = function (key, lang) {
+    var p = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!p) return '';
+    var y = +p[1], m = +p[2] - 1, d = +p[3];
+    return (lang || App.lang) === 'en' ? d + ' ' + EN_MONTHS_SHORT[m] + ' ' + y : d + ' ' + TH_MONTHS_SHORT[m] + ' ' + (y + 543);
+  };
+
+  /** แปลข้อความ error จากเซิร์ฟเวอร์ (ภาษาไทย) ที่ลูกจ้างอาจเห็น เป็นภาษาอังกฤษ */
+  var ERROR_EN = [
+    [/รหัสพนักงานหรือรหัสผ่านไม่ถูกต้อง(?:.*เหลืออีก (\d) ครั้ง)?/, function (m) { return 'Incorrect employee ID or PIN' + (m[1] ? ' (' + m[1] + ' attempt(s) left before lock-out)' : ''); }],
+    [/ล็อก/, 'Too many wrong attempts — your account is locked for 15 minutes. The finance office can unlock it.'],
+    [/บัญชีผู้ดูแลระบบ/, 'This is an administrator account. Please use the staff sign-in page.'],
+    [/PIN ต้องเป็นตัวเลข 6 หลัก/, 'PIN must be exactly 6 digits'],
+    [/เรียงกัน/, 'PIN must not be a sequence such as 123456'],
+    [/ซ้ำกันทั้งหมด/, 'PIN must not repeat one digit (e.g. 111111)'],
+    [/เลขบัตรประชาชน/, 'PIN must not match the last 6 digits of your national ID'],
+    [/ไม่ซ้ำกับรหัสเดิม/, 'The new PIN must differ from your current PIN'],
+    [/รหัสผ่านเดิมไม่ถูกต้อง/, 'Your current PIN is incorrect'],
+    [/เซสชันหมดอายุ|กรุณาเข้าสู่ระบบ/, 'Your session has expired. Please sign in again.'],
+    [/ยังไม่มีสลิป/, 'There is no approved payslip for this month yet'],
+    [/เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ/, 'Could not reach the server. Please try again.']
+  ];
+  App.tErr = function (msg) {
+    if (App.lang !== 'en') return msg;
+    for (var i = 0; i < ERROR_EN.length; i++) {
+      var m = String(msg).match(ERROR_EN[i][0]);
+      if (m) return typeof ERROR_EN[i][1] === 'function' ? ERROR_EN[i][1](m) : ERROR_EN[i][1];
+    }
+    return msg;
+  };
+
+  /** ปุ่มสลับภาษา TH | EN */
+  App.langToggle = function () {
+    return '<div class="inline-flex rounded-lg border border-gray-200 bg-white overflow-hidden text-xs font-semibold" role="group" aria-label="Language">' +
+      ['th', 'en'].map(function (l) {
+        return '<button type="button" data-lang="' + l + '" class="lang-btn px-2.5 py-1 ' + (App.lang === l ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-50') + '"' +
+          (App.lang === l ? ' aria-pressed="true"' : '') + '>' + l.toUpperCase() + '</button>';
+      }).join('') + '</div>';
+  };
+  App.bindLangToggle = function (root) {
+    (root || document).querySelectorAll('.lang-btn').forEach(function (b) {
+      b.onclick = function () { if (b.getAttribute('data-lang') !== App.lang) App.setLang(b.getAttribute('data-lang')); };
+    });
+  };
+</script>

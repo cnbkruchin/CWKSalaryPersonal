@@ -1,135 +1,196 @@
 <script>
-  App.views.adminReports = function (root) {
+  /** หลังบ้าน: เอกสารประกอบการเบิกจ่ายรายเดือน (ตามแบบเอกสารเดิมของโรงเรียน) */
+  App.views.adminReports = function (root, params) {
+    var TABS = [
+      { key: 'memo', file: 'memo', label: 'บันทึกข้อความ', landscape: false, word: true },
+      { key: 'table', file: 'salary-table', label: 'ตารางเงินเดือน', landscape: true },
+      { key: 'detail', file: 'salary-detail', label: 'รายละเอียดเพิ่มเติม', landscape: true },
+      { key: 'bank', file: 'bank-transfer', label: 'เอกสารส่งธนาคาร', landscape: false, word: true }
+    ];
+    var state = { month: params && params.month, tab: (params && params.tab) || 'memo', data: null, forms: {} };
+
+    ensureDocCss();
     root.innerHTML = App.adminShell('reports',
       '<div class="p-4 sm:p-6">' +
-        '<div class="flex items-center justify-between mb-4 flex-wrap gap-3">' +
-          '<h1 class="text-xl font-bold">รายงาน / เอกสารขออนุมัติ</h1>' +
-          '<div class="flex items-center gap-2">' +
-            '<select id="month-select" class="input"></select>' +
-          '</div>' +
+        '<div class="no-print flex items-end justify-between gap-3 flex-wrap mb-3">' +
+          '<div><label class="label" for="month-select">รอบจ่ายประจำเดือน</label><select id="month-select" class="input min-w-[14rem]"></select></div>' +
+          '<div id="doc-status" class="text-sm text-gray-600"></div>' +
         '</div>' +
-        '<div class="flex gap-2 mb-4 no-print">' +
-          '<button id="tab-memo" class="btn btn-primary">บันทึกข้อความขออนุมัติ</button>' +
-          '<button id="tab-bank" class="btn btn-secondary">ใบโอนเงินธนาคาร</button>' +
+        '<div class="no-print flex gap-1 flex-wrap border-b border-gray-200 mb-4" role="tablist">' +
+          TABS.map(function (t) { return '<button data-tab="' + t.key + '" role="tab" class="doc-tab px-3 py-2 text-sm font-semibold border-b-2 -mb-px">' + t.label + '</button>'; }).join('') +
         '</div>' +
-        '<div id="report-body"></div>' +
-      '</div>'
-    );
+        '<div id="doc-editor" class="no-print"></div>' +
+        '<div class="no-print flex gap-2 flex-wrap mb-3">' +
+          '<button id="btn-print" class="btn btn-primary"><span class="w-4 h-4">' + App.icon('print') + '</span> พิมพ์ / บันทึก PDF</button>' +
+          '<button id="btn-word" class="btn btn-secondary">ดาวน์โหลด Word (.doc)</button>' +
+          '<button id="btn-excel" class="btn btn-secondary">ดาวน์โหลด Excel (3 ตาราง)</button>' +
+        '</div>' +
+        '<div id="print-area" class="doc-scroll"><p class="text-gray-400">กำลังโหลด...</p></div>' +
+      '</div>');
 
-    var monthSelect = document.getElementById('month-select');
-    var currentTab = 'memo';
+    root.querySelectorAll('.doc-tab').forEach(function (b) { b.onclick = function () { state.tab = b.getAttribute('data-tab'); render(); }; });
+    document.getElementById('btn-print').onclick = doPrint;
+    document.getElementById('btn-word').onclick = doWord;
+    document.getElementById('btn-excel').onclick = doExcel;
 
     App.call('listPayrollMonths').then(function (months) {
+      var sel = document.getElementById('month-select');
       if (!months.length) {
-        document.getElementById('report-body').innerHTML = '<div class="card p-6 text-gray-400">ยังไม่มีรอบจ่ายเงินเดือนในระบบ</div>';
+        document.getElementById('print-area').innerHTML = '<div class="card p-6 text-gray-500">ยังไม่มีรอบจ่ายเงินเดือน — สร้างรอบจ่ายหรือ<a class="text-brand-600 underline" href="#/admin/import">นำเข้าจาก Excel</a>ก่อน</div>';
         return;
       }
-      monthSelect.innerHTML = months.map(function (m) {
-        return '<option value="' + m.month + '">' + App.esc(m.monthLabel) + ' (' + (m.status === 'approved' ? 'อนุมัติแล้ว' : 'แบบร่าง') + ')</option>';
+      sel.innerHTML = months.map(function (m) {
+        return '<option value="' + m.month + '">' + App.esc(m.monthLabel) + (m.status === 'approved' ? '' : ' (แบบร่าง)') + '</option>';
       }).join('');
-      monthSelect.onchange = renderTab;
-      renderTab();
+      if (state.month && months.some(function (m) { return m.month === state.month; })) sel.value = state.month;
+      sel.onchange = function () { load(sel.value); };
+      load(sel.value);
     }).catch(function (err) { App.toast(err.message, 'error'); });
 
-    document.getElementById('tab-memo').onclick = function () { currentTab = 'memo'; setActiveTab(); renderTab(); };
-    document.getElementById('tab-bank').onclick = function () { currentTab = 'bank'; setActiveTab(); renderTab(); };
-
-    function setActiveTab() {
-      document.getElementById('tab-memo').className = 'btn ' + (currentTab === 'memo' ? 'btn-primary' : 'btn-secondary');
-      document.getElementById('tab-bank').className = 'btn ' + (currentTab === 'bank' ? 'btn-primary' : 'btn-secondary');
+    function load(month) {
+      state.month = month;
+      document.getElementById('print-area').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
+      App.call('getDisbursementDocs', month).then(function (d) {
+        state.data = d;
+        if (!state.forms[month]) {
+          var today = new Date();
+          var todayKey = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+          state.forms[month] = {
+            docNo: d.school.memoDocPrefix ? d.school.memoDocPrefix + '/' : '',
+            memoDate: todayKey,
+            bankDate: todayKey,
+            lines: d.memoLines.map(function (l) { return { description: l.description, amount: l.amount, note: l.note }; })
+          };
+        }
+        render();
+      }).catch(function (err) {
+        document.getElementById('print-area').innerHTML = '<div class="card p-6 text-red-700">' + App.esc(err.message) + '</div>';
+      });
     }
 
-    function renderTab() {
-      if (!monthSelect.value) return;
-      if (currentTab === 'memo') renderMemo(monthSelect.value); else renderBankList(monthSelect.value);
+    function tabDef() { return TABS.filter(function (t) { return t.key === state.tab; })[0]; }
+    function form() { return state.forms[state.month]; }
+
+    function thaiDate(key, withWords) {
+      var m = String(key || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return '';
+      return parseInt(m[3], 10) + (withWords ? ' เดือน ' : ' ') + App.THAI_MONTHS[parseInt(m[2], 10) - 1] + (withWords ? ' พ.ศ. ' : ' ') + (parseInt(m[1], 10) + 543);
     }
 
-    function renderMemo(month) {
-      document.getElementById('report-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
-      App.call('getApprovalMemo', month).then(function (memo) {
-        var s = memo.signers;
-        document.getElementById('report-body').innerHTML =
-          '<div class="no-print mb-3"><button id="btn-print-memo" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button></div>' +
-          '<div id="print-area">' +
-          '<div class="card p-10 leading-relaxed text-[15px]" style="max-width:210mm;margin:0 auto;font-family:Sarabun,sans-serif">' +
-            '<div class="text-center font-bold text-lg mb-4">บันทึกข้อความ</div>' +
-            '<div>ส่วนราชการ &nbsp; ' + App.esc(memo.schoolName) + ' ' + App.esc(memo.schoolAddress) + '</div>' +
-            '<div class="flex justify-between"><span>ที่ ....................../..........</span><span>วันที่ ................ เดือน .................... พ.ศ. ....................</span></div>' +
-            '<div class="mt-2"><b>เรื่อง</b> &nbsp; ขออนุมัติเงินค่าจ้างลูกจ้างชั่วคราว และเงินประกันสังคมสมทบ ประจำเดือน' + App.esc(memo.monthLabel) + '</div>' +
-            '<div><b>เรียน</b> &nbsp; ผู้อำนวยการ' + App.esc(memo.schoolName) + '</div>' +
-            '<p class="mt-3 indent-8">ด้วยฝ่ายการเงิน แจ้งความประสงค์ขอเบิกเงินเพื่อใช้ในการดำเนินการจ่ายเงินเดือนบุคลากร' + App.esc(memo.schoolName) + ' ประจำเดือน' + App.esc(memo.monthLabel) + ' มีรายการดังต่อไปนี้</p>' +
-            '<table class="w-full mt-3 border border-gray-800" style="border-collapse:collapse">' +
-              '<thead><tr class="border border-gray-800">' +
-                ['ที่', 'รายการ', 'จำนวนเงิน (บาท)', 'หมายเหตุ'].map(function (h) { return '<th class="border border-gray-800 p-2">' + h + '</th>'; }).join('') +
-              '</tr></thead><tbody>' +
-              memo.lines.map(function (l) {
-                return '<tr class="border border-gray-800">' +
-                  '<td class="border border-gray-800 p-2 text-center">' + l.no + '.</td>' +
-                  '<td class="border border-gray-800 p-2">' + App.esc(l.description) + '</td>' +
-                  '<td class="border border-gray-800 p-2 text-right">' + App.money(l.amount) + '</td>' +
-                  '<td class="border border-gray-800 p-2">' + App.esc(l.note) + '</td></tr>';
-              }).join('') +
-              '<tr class="border border-gray-800 font-bold"><td class="border border-gray-800 p-2 text-center" colspan="2">รวมทั้งหมด</td>' +
-              '<td class="border border-gray-800 p-2 text-right">' + App.money(memo.grandTotal) + '</td><td class="border border-gray-800 p-2"></td></tr>' +
-              '<tr class="border border-gray-800"><td class="border border-gray-800 p-2 text-center" colspan="4">ตัวหนังสือ &nbsp; ( ' + App.esc(memo.grandTotalText) + ' )</td></tr>' +
-              '</tbody></table>' +
-            '<p class="mt-4">จึงเรียนมาเพื่อทราบ</p>' +
-            '<div class="mt-10 text-center">ลงชื่อ..........................................................<br>' +
-              '( ' + App.esc(s.financeOfficerName || '.............................') + ' )<br>' + App.esc(s.financeOfficerTitle) + '</div>' +
-            '<hr class="my-6">' +
-            '<div class="font-bold mb-2">ความเห็นเพิ่มเติม</div>' +
-            signBlock(s.budgetHeadName, s.budgetHeadTitle) +
-            signBlock(s.deputyDirectorName, s.deputyDirectorTitle) +
-            signBlock(s.directorName, s.directorTitle) +
+    function render() {
+      var d = state.data;
+      root.querySelectorAll('.doc-tab').forEach(function (b) {
+        var on = b.getAttribute('data-tab') === state.tab;
+        b.className = 'doc-tab px-3 py-2 text-sm font-semibold border-b-2 -mb-px ' + (on ? 'border-brand-600 text-brand-700' : 'border-transparent text-gray-500 hover:text-gray-800');
+        b.setAttribute('aria-selected', on);
+      });
+      if (!d) return;
+      document.getElementById('doc-status').innerHTML = d.approved
+        ? '<span class="badge badge-approved">อนุมัติแล้ว</span> จ่ายวันที่ <b>' + App.esc(d.paidDateLabel) + '</b> · ' + d.lines.length + ' คน · สุทธิ ' + App.money(d.totals.netPay) + ' บาท'
+        : '<span class="badge badge-draft">แบบร่าง</span> ตัวเลขอาจเปลี่ยน — ควรอนุมัติรอบจ่ายก่อนออกเอกสารจริง';
+      document.getElementById('btn-word').classList.toggle('hidden', !tabDef().word);
+      renderEditor();
+      renderPreview();
+    }
+
+    function renderEditor() {
+      var f = form();
+      var ed = document.getElementById('doc-editor');
+      if (state.tab === 'memo') {
+        var total = f.lines.reduce(function (s, l) { return s + (Number(l.amount) || 0); }, 0);
+        var diff = Math.round((total - state.data.summary.grandTotal) * 100) / 100;
+        ed.innerHTML = '<div class="card p-4 mb-3">' +
+          '<div class="tbl sm:grid-cols-2 gap-3">' +
+            '<div><label class="label" for="f-docno">ที่ (เลขที่หนังสือ)</label><input id="f-docno" class="input" value="' + App.esc(f.docNo) + '"></div>' +
+            '<div><label class="label" for="f-date">วันที่หนังสือ</label><input id="f-date" type="date" class="input" value="' + App.esc(f.memoDate) + '"></div>' +
+          '</div>' +
+          '<div class="mt-3 text-sm font-semibold">รายการขออนุมัติ</div>' +
+          '<div class="overflow-x-auto"><table class="w-full text-sm mt-1"><tbody>' +
+            f.lines.map(function (l, i) {
+              return '<tr><td class="pr-2 py-1 w-6 text-gray-400">' + (i + 1) + '.</td>' +
+                '<td class="pr-2 py-1"><input class="input !py-1 ml-desc" data-i="' + i + '" value="' + App.esc(l.description) + '"></td>' +
+                '<td class="pr-2 py-1 w-36"><input type="number" step="0.01" class="input !py-1 text-right ml-amt" data-i="' + i + '" value="' + l.amount + '"></td>' +
+                '<td class="pr-2 py-1 w-32"><input class="input !py-1 ml-note" data-i="' + i + '" value="' + App.esc(l.note) + '"></td>' +
+                '<td class="py-1 w-10"><button class="btn btn-ghost !px-2 ml-del" data-i="' + i + '" aria-label="ลบรายการ">✕</button></td></tr>';
+            }).join('') +
+          '</tbody></table></div>' +
+          '<div class="flex items-center justify-between flex-wrap gap-2 mt-2 text-sm">' +
+            '<div class="flex gap-2"><button id="ml-add" class="btn btn-secondary !py-1">+ เพิ่มรายการ</button>' +
+              '<button id="ml-reset" class="btn btn-ghost !py-1">คืนค่าจากรอบจ่าย</button></div>' +
+            '<div>รวม <b>' + App.money(total) + '</b> บาท' + (diff ? ' <span class="text-amber-700">(ต่างจากยอดรวมเงินเดือน ' + App.money(state.data.summary.grandTotal) + ' อยู่ ' + App.money(diff) + ')</span>' : ' <span class="text-green-700">✓ ตรงกับยอดรวมเงินเดือน</span>') + '</div>' +
           '</div></div>';
-        document.getElementById('btn-print-memo').onclick = function () {
-          App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
-          window.print();
+        bindInput('f-docno', function (v) { f.docNo = v; });
+        bindInput('f-date', function (v) { f.memoDate = v; });
+        ed.querySelectorAll('.ml-desc').forEach(function (el) { el.oninput = function () { f.lines[el.dataset.i].description = el.value; renderPreview(); }; });
+        ed.querySelectorAll('.ml-note').forEach(function (el) { el.oninput = function () { f.lines[el.dataset.i].note = el.value; renderPreview(); }; });
+        ed.querySelectorAll('.ml-amt').forEach(function (el) { el.onchange = function () { f.lines[el.dataset.i].amount = Number(el.value) || 0; render(); }; });
+        ed.querySelectorAll('.ml-del').forEach(function (el) { el.onclick = function () { f.lines.splice(Number(el.dataset.i), 1); render(); }; });
+        document.getElementById('ml-add').onclick = function () { f.lines.push({ description: '', amount: 0, note: 'เบิกเงินสด' }); render(); };
+        document.getElementById('ml-reset').onclick = function () {
+          f.lines = state.data.memoLines.map(function (l) { return { description: l.description, amount: l.amount, note: l.note }; });
+          render();
         };
-      }).catch(function (err) { App.toast(err.message, 'error'); });
+      } else if (state.tab === 'bank') {
+        var sc = state.data.school;
+        ed.innerHTML = '<div class="card p-4 mb-3">' +
+          '<div class="tbl sm:grid-cols-2 gap-3">' +
+            '<div><label class="label" for="f-docno">ที่ (เลขที่หนังสือถึงธนาคาร)</label><input id="f-docno" class="input" value="' + App.esc(f.docNo) + '"></div>' +
+            '<div><label class="label" for="f-date">วันที่หนังสือ</label><input id="f-date" type="date" class="input" value="' + App.esc(f.bankDate) + '"></div>' +
+          '</div>' +
+          (!sc.bankAccountNo || !sc.bankBranch
+            ? '<p class="text-sm text-amber-800 bg-amber-50 rounded-lg px-3 py-2 mt-3">ยังไม่ได้กรอกสาขา/เลขที่บัญชีของโรงเรียน — ตั้งค่าได้ที่ <a class="underline" href="#/admin/settings">ตั้งค่าระบบ</a></p>' : '') +
+          '</div>';
+        bindInput('f-docno', function (v) { f.docNo = v; });
+        bindInput('f-date', function (v) { f.bankDate = v; });
+      } else {
+        ed.innerHTML = '';
+      }
     }
 
-    function signBlock(name, title) {
-      return '<div class="mt-4 text-sm">' +
-        '&#9744; ทราบ &nbsp;&nbsp; &#9744; พิจารณาแล้ว [ &nbsp; ] เห็นควรพิจารณาอนุมัติจ่ายเงินตามแผน' +
-        '<div class="text-center mt-6">ลงชื่อ..........................................................<br>' +
-        '( ' + App.esc(name || '.............................') + ' )<br>ตำแหน่ง ' + App.esc(title) + '</div></div>';
+    function bindInput(id, set) {
+      var el = document.getElementById(id);
+      el.oninput = function () { set(el.value); renderPreview(); };
     }
 
-    function renderBankList(month) {
-      document.getElementById('report-body').innerHTML = '<p class="text-gray-400">กำลังโหลด...</p>';
-      App.call('getBankTransferList', month).then(function (r) {
-        document.getElementById('report-body').innerHTML =
-          (r.approved ? '' : '<div class="no-print mb-3 rounded-xl bg-amber-50 text-amber-800 text-sm px-4 py-3">รอบจ่ายเดือนนี้ยังเป็นแบบร่าง — ตัวเลขอาจเปลี่ยน ควรอนุมัติก่อนส่งธนาคาร</div>') +
-          '<div class="no-print mb-3 flex gap-2 flex-wrap"><button id="btn-print-bank" class="btn btn-primary">พิมพ์ / บันทึกเป็น PDF</button>' +
-          '<button id="btn-csv-bank" class="btn btn-secondary">ดาวน์โหลด CSV (Excel)</button></div>' +
-          '<div id="print-area">' +
-          '<div class="card p-8" style="max-width:210mm;margin:0 auto;font-family:Sarabun,sans-serif">' +
-            '<div class="text-center font-bold mb-4">การจ่ายเงินเดือนอัตราจ้างชั่วคราว ' + App.esc(r.schoolName) + ' เดือน' + App.esc(r.monthLabel) + '</div>' +
-            '<table class="w-full border border-gray-800" style="border-collapse:collapse">' +
-              '<thead><tr>' + ['ลำดับ', 'ชื่อ-สกุล', 'เลขที่บัญชี', 'จำนวนเงิน'].map(function (h) { return '<th class="border border-gray-800 p-2">' + h + '</th>'; }).join('') + '</tr></thead>' +
-              '<tbody>' + r.list.map(function (x, i) {
-                return '<tr><td class="border border-gray-800 p-2 text-center">' + (i + 1) + '</td>' +
-                  '<td class="border border-gray-800 p-2">' + App.esc(x.fullName) + '</td>' +
-                  '<td class="border border-gray-800 p-2 font-mono">' + App.esc(x.bankName) + ' ' + App.esc(x.bankAccountNo) + '</td>' +
-                  '<td class="border border-gray-800 p-2 text-right">' + App.money(x.netPay) + '</td></tr>';
-              }).join('') +
-              '<tr class="font-bold"><td class="border border-gray-800 p-2 text-center" colspan="3">รวม</td><td class="border border-gray-800 p-2 text-right">' + App.money(r.total) + '</td></tr>' +
-              '</tbody></table>' +
-            '<p class="mt-2 text-sm">(' + App.esc(r.totalText) + ')</p>' +
-          '</div></div>';
-        document.getElementById('btn-csv-bank').onclick = function () {
-          var rows = [['ลำดับ', 'รหัสพนักงาน', 'ชื่อ-สกุล', 'ธนาคาร', 'เลขที่บัญชี', 'จำนวนเงิน']].concat(r.list.map(function (x, i) {
-            return [i + 1, x.employeeId, x.fullName, x.bankName, '="' + x.bankAccountNo + '"', x.netPay.toFixed(2)];
-          }));
-          rows.push(['', '', 'รวม', '', '', r.total.toFixed(2)]);
-          App.downloadText('bank-transfer-' + month + '.csv', App.csv(rows));
-        };
-        document.getElementById('btn-print-bank').onclick = function () {
-          App.setPrintPageStyle('@page { size: A4 portrait; margin: 15mm; }');
-          window.print();
-        };
-      }).catch(function (err) { App.toast(err.message, 'error'); });
+    function currentHtml() {
+      var d = state.data, f = form();
+      if (state.tab === 'memo') return App.docs.memo(d, { docNo: f.docNo, dateLabel: thaiDate(f.memoDate, true), lines: f.lines });
+      if (state.tab === 'table') return App.docs.salaryTable(d);
+      if (state.tab === 'detail') return App.docs.detail(d);
+      return App.docs.bank(d, { docNo: f.docNo, dateLabel: thaiDate(f.bankDate, false) });
+    }
+
+    function renderPreview() {
+      document.getElementById('print-area').innerHTML = currentHtml();
+    }
+
+    function doPrint() {
+      if (!state.data) return;
+      var t = tabDef();
+      App.setPrintPageStyle(t.landscape ? '@page { size: A4 landscape; margin: 10mm; }' : '@page { size: A4 portrait; margin: 15mm 18mm 12mm 25mm; }');
+      App.call('logDocumentExport', state.month, 'พิมพ์ ' + t.label).catch(function () {});
+      window.print();
+    }
+
+    function doWord() {
+      if (!state.data) return;
+      var t = tabDef();
+      App.call('logDocumentExport', state.month, 'Word ' + t.label).catch(function () {});
+      App.docs.exportWord(t.file + '-' + state.month + '.doc', currentHtml(), t.landscape);
+    }
+
+    function doExcel() {
+      if (!state.data) return;
+      App.call('logDocumentExport', state.month, 'Excel 3 ตาราง').catch(function () {});
+      App.docs.exportExcel(state.data).catch(function (err) { App.toast(err.message, 'error'); });
+    }
+
+    function ensureDocCss() {
+      if (document.getElementById('doc-css')) return;
+      var st = document.createElement('style');
+      st.id = 'doc-css';
+      st.textContent = App.docs.css(12);
+      document.head.appendChild(st);
     }
   };
 </script>

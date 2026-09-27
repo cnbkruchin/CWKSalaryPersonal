@@ -150,3 +150,41 @@ function formatThaiDateShort(value) {
   if (!m) return String(value);
   return parseInt(m[3], 10) + ' ' + THAI_MONTH_ABBR[parseInt(m[2], 10) - 1] + ' ' + (parseInt(m[1], 10) + 543);
 }
+
+function isValidDateKey(d) {
+  if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+  var p = d.split('-').map(Number);
+  var dt = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+  return dt.getUTCFullYear() === p[0] && dt.getUTCMonth() === p[1] - 1 && dt.getUTCDate() === p[2];
+}
+
+/**
+ * วันจ่ายเงินเดือนตั้งต้นของเดือน ตามค่า DefaultPayDay:
+ *   'last-workday' = วันทำการสุดท้ายของเดือน (จ.–ศ.), ตัวเลข 1–31 = วันที่คงที่ (ถ้าตรงเสาร์-อาทิตย์ เลื่อนเป็นศุกร์ก่อนหน้า)
+ */
+function defaultPaidDate_(month, setting) {
+  var p = month.split('-').map(Number);
+  var last = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+  var day = /^\d+$/.test(String(setting)) ? Math.min(Math.max(parseInt(setting, 10), 1), last) : last;
+  var dt = new Date(Date.UTC(p[0], p[1] - 1, day));
+  while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6) dt.setUTCDate(dt.getUTCDate() - 1);
+  var mm = dt.getUTCMonth() + 1, dd = dt.getUTCDate();
+  return dt.getUTCFullYear() + '-' + (mm < 10 ? '0' : '') + mm + '-' + (dd < 10 ? '0' : '') + dd;
+}
+
+/** "2026-09-25" -> "25 กันยายน พ.ศ. 2569" */
+function formatThaiDateLong(value) {
+  var m = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return parseInt(m[3], 10) + ' ' + THAI_MONTH_NAMES[parseInt(m[2], 10) - 1] + ' พ.ศ. ' + (parseInt(m[1], 10) + 543);
+}
+
+/** ปีงบประมาณไทย (ต.ค.–ก.ย.) ของเดือน YYYY-MM -> { yearBE, rangeText } */
+function thaiFiscalYear_(month) {
+  var p = month.split('-').map(Number);
+  var fyBE = (p[1] >= 10 ? p[0] + 1 : p[0]) + 543;
+  return {
+    yearBE: fyBE,
+    rangeText: 'ตั้งแต่วันที่ 1 ตุลาคม พ.ศ. ' + (fyBE - 1) + ' ถึง 30 กันยายน พ.ศ. ' + fyBE
+  };
+}

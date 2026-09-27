@@ -116,6 +116,10 @@
           '<div><label class="label">เลขบัตรประชาชน 13 หลัก / หนังสือเดินทาง</label><input id="f-citizen" class="input" value="' + App.esc(r ? r.citizenID : '') + '"></div>' +
           '<div><label class="label">เบอร์โทร</label><input id="f-phone" class="input" inputmode="tel" value="' + App.esc(r ? r.phone : '') + '"></div>' +
           (isEdit ? '' : '<div><label class="label">อัตราเงินเดือนเริ่มต้น</label><input id="f-salary" type="number" step="0.01" class="input"></div>') +
+          '<div><label class="label">ประเภทการจ้าง (หมายเหตุ 2 ในรายงาน)</label><select id="f-emptype" class="input">' +
+            ['', 'ลูกจ้าง มี ปกส.', 'จ้างเหมาบริการ', 'งบเขต', 'อื่นๆ'].map(function (t) {
+              return '<option value="' + t + '"' + (r && r.employmentType === t ? ' selected' : '') + '>' + (t || '— อัตโนมัติจากสถานะ ปกส. —') + '</option>';
+            }).join('') + '</select></div>' +
           '<div class="flex items-center gap-2 pt-6"><input type="checkbox" id="f-sso" ' + (r && r.hasSSO ? 'checked' : '') + '><label for="f-sso" class="text-sm">มีการหักสมทบประกันสังคม (ปกส.)</label></div>' +
           '<div class="sm:col-span-2"><label class="label">หมายเหตุ</label><input id="f-note" class="input" value="' + App.esc(r ? r.note : '') + '"></div>' +
           '<div class="sm:col-span-2 flex justify-end gap-2 pt-2">' +
@@ -141,7 +145,7 @@
           prefixName: val('f-prefix'), firstName: val('f-first'), lastName: val('f-last'),
           group: val('f-group'), position: val('f-position'), startDate: val('f-start'),
           bankName: val('f-bank'), bankAccountNo: val('f-account'), citizenID: val('f-citizen'),
-          phone: val('f-phone'), hasSSO: document.getElementById('f-sso').checked, note: val('f-note')
+          phone: val('f-phone'), hasSSO: document.getElementById('f-sso').checked, note: val('f-note'), employmentType: val('f-emptype')
         };
         var promise;
         if (existing) {

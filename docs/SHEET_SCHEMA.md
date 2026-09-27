@@ -32,6 +32,7 @@
 | MustChangePin | boolean | TRUE = ใช้รหัสชั่วคราว ต้องตั้งรหัสใหม่เมื่อเข้าใช้ครั้งถัดไป |
 | PdpaAcceptedAt | datetime | เวลาที่ลูกจ้างยอมรับประกาศความเป็นส่วนตัว (ว่าง = ยังไม่ยอมรับ) |
 | LastLoginAt | datetime | เข้าใช้งานล่าสุด |
+| EmploymentType | string | ประเภทการจ้าง เช่น `ลูกจ้าง มี ปกส.` / `จ้างเหมาบริการ` (แสดงเป็นหมายเหตุในเอกสาร "รายละเอียดเพิ่มเติม") |
 
 ## 2. `SalaryHistory` — ประวัติเงินเดือนพื้นฐาน / การเลื่อนขั้น
 
@@ -86,8 +87,10 @@
 | TotalDeduction | รวมหักทั้งหมด |
 | NetPay | คงเหลือสุทธิที่โอนเข้าบัญชี |
 | Status | `draft` / `approved` |
-| PaidDate | วันที่จ่ายจริง |
+| PaidDate | วันที่จ่ายเงินเดือน `YYYY-MM-DD` — ระบุตอนอนุมัติ แก้ภายหลังได้ แสดงบนสลิปและเอกสารเบิกจ่าย |
 | UpdatedAt / UpdatedBy | ผู้แก้ไขล่าสุด |
+| Note | หมายเหตุรายคนประจำเดือน (แสดงบนสลิป) |
+| Source | ที่มาของข้อมูล — ว่าง = สร้างในระบบ, `นำเข้า: <ชื่อไฟล์> / <ชีต>` = นำเข้าจาก Excel |
 
 ## 5. `PayrollDeductions` — รายการหักอื่น ๆ ต่อคนต่อเดือน (0..n แถวต่อคน)
 
@@ -115,6 +118,10 @@
 | DeputyDirectorName / Title | รองผู้อำนวยการ |
 | DirectorName / Title | ผู้อำนวยการโรงเรียน |
 | DataControllerContact | ช่องทางติดต่อเรื่องข้อมูลส่วนบุคคล (แสดงในประกาศ PDPA) |
+| DefaultPayDay | วันจ่ายเงินเดือนตั้งต้น: `last-workday` (วันทำการสุดท้ายของเดือน) หรือเลขวันที่ `1`–`31` (ตรงเสาร์-อาทิตย์เลื่อนเป็นวันศุกร์ก่อนหน้า) |
+| SchoolBankName / SchoolBankBranch | ธนาคาร/สาขาของบัญชีโรงเรียน (หนังสือขอให้โอนเงิน) |
+| SchoolBankAccountName / SchoolBankAccountNo | ชื่อบัญชีและเลขที่บัญชีที่ธนาคารตัดเงินโอน |
+| MemoDocPrefix | คำนำหน้าเลขที่หนังสือ เช่น `ศธ 04282.xxx/` |
 | SessionTimeoutMinutes | อายุเซสชันหลังบ้าน (นาที) |
 | AuthPepper | ค่าสุ่มสำหรับแฮชรหัสผ่านและลงลายมือชื่อรหัสตรวจสอบสลิป (สร้างอัตโนมัติ **ห้ามแก้** — แก้แล้วรหัสผ่านและ QR บนสลิปเก่าใช้ไม่ได้ทั้งหมด) |
 
@@ -127,6 +134,6 @@
 | Timestamp | เวลา (ISO) |
 | ActorID | รหัสผู้กระทำ (`public` = ผู้ตรวจสอบสลิปจากภายนอก) |
 | Role | `admin` / `employee` |
-| Action | รหัสการกระทำ เช่น `LOGIN`, `LOGIN_FAILED`, `APPROVE_RUN`, `REOPEN_RUN`, `SALARY_ADJUST`, `RESET_PIN`, `VERIFY_PAYSLIP` |
+| Action | รหัสการกระทำ เช่น `LOGIN`, `LOGIN_FAILED`, `APPROVE_RUN`, `REOPEN_RUN`, `SALARY_ADJUST`, `RESET_PIN`, `VERIFY_PAYSLIP`, `SET_PAID_DATE`, `IMPORT_PAYROLL`, `EXPORT_DOCUMENT` |
 | Target | ข้อมูลที่ถูกกระทำ เช่น `Cwk005 @ 2026-09` |
 | Detail | รายละเอียด เช่น ฟิลด์ที่แก้, เหตุผลการเปิดรอบ |

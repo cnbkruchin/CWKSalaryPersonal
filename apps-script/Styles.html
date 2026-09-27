@@ -128,9 +128,16 @@
   .payslip-net .label { font-weight: 700; color: #334; }
   .payslip-net .amount { font-size: 1.4rem; font-weight: 700; color: #1a2f6e; }
   .payslip-net .text { font-size: .8rem; color: #556; }
+  .payslip .en { font-size: .68em; color: #7a8399; font-weight: 400; letter-spacing: .01em; }
   .payslip-note { font-size: .78rem; color: #667; margin-top: 8px; }
   .payslip-footer { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-top: auto; padding-top: 12px; font-size: .82rem; color: #445; }
   .payslip-footer .sign { text-align: center; }
+
+  /* ---------- เอกสารเบิกจ่าย (กระดาษ A4) ---------- */
+  .doc-scroll { overflow-x: auto; padding: 4px 0 16px; }
+  .paper { background: #fff; width: 210mm; min-height: 297mm; padding: 15mm 18mm 12mm 25mm; margin: 0 auto 16px;
+    box-shadow: 0 2px 12px rgba(20,30,60,.12); box-sizing: border-box; }
+  .paper.landscape { width: 297mm; min-height: 210mm; padding: 10mm; }
 
   @media print {
     body * { visibility: hidden; }
@@ -138,6 +145,9 @@
     #print-area { position: absolute; left: 0; top: 0; width: 100%; }
     .payslip { border: none; border-radius: 0; box-shadow: none; page-break-after: always; margin: 0 auto; }
     .no-print { display: none !important; }
+    .paper { box-shadow: none; margin: 0; padding: 0; width: auto; min-height: 0; page-break-after: always; }
+    .paper:last-child { page-break-after: auto; }
+    .doc-scroll { overflow: visible; padding: 0; }
     .slip-fit > .payslip { transform: none !important; }
     #print-area .card { box-shadow: none; padding: 0; }
   }

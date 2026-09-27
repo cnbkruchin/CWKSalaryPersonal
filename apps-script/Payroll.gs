@@ -123,6 +123,7 @@ function buildPayrollRunView_(month, rows) {
       totalDeduction: Number(r.TotalDeduction),
       netPay: Number(r.NetPay),
       status: r.Status,
+      note: r.Note || '',
       deductions: deductions.filter(function (d) { return d.EmployeeID === r.EmployeeID; }).map(function (d) {
         return { deductionId: d.DeductionID, category: d.Category, label: d.Label, amount: Number(d.Amount) };
       }),
@@ -138,10 +139,15 @@ function buildPayrollRunView_(month, rows) {
     totals[k] = round2(lines.reduce(function (s, l) { return s + l[k]; }, 0));
   });
 
+  var approved = rows.length && rows.every(function (r) { return r.Status === 'approved'; });
   return {
     month: month,
     monthLabel: formatThaiMonthLong(month),
-    status: rows.length && rows.every(function (r) { return r.Status === 'approved'; }) ? 'approved' : 'draft',
+    status: approved ? 'approved' : 'draft',
+    paidDate: approved ? rows[0].PaidDate : '',
+    paidDateLabel: approved ? formatThaiDateLong(rows[0].PaidDate) : '',
+    defaultPaidDate: defaultPaidDate_(month, getSetting_('DefaultPayDay', 'last-workday')),
+    source: rows[0] && rows[0].Source ? rows[0].Source : '',
     lines: lines,
     totals: totals,
     totalsText: bahtText(totals.netPay)
@@ -262,9 +268,11 @@ function removePayrollDeduction(token, month, employeeId, deductionId) {
   }
 }
 
-function approvePayrollRun(token, month) {
+function approvePayrollRun(token, month, paidDate) {
   try {
     var session = requireAuth_(token, ['admin']);
+    paidDate = paidDate || defaultPaidDate_(month, getSetting_('DefaultPayDay', 'last-workday'));
+    if (!isValidDateKey(paidDate)) return apiError('วันที่จ่ายไม่ถูกต้อง (รูปแบบ YYYY-MM-DD)');
     return withLock_(function () {
       var rows = findAll_(SHEET_NAMES.PAYROLL_RUNS, 'Month', month);
       if (!rows.length) return apiError('ยังไม่มีรอบจ่ายของเดือนนี้');
@@ -272,13 +280,31 @@ function approvePayrollRun(token, month) {
       if (negative.length) {
         return apiError('มียอดสุทธิติดลบ ' + negative.length + ' ราย (' + negative.map(function (r) { return r.EmployeeID; }).join(', ') + ') กรุณาตรวจสอบก่อนอนุมัติ');
       }
-      var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone() || 'Asia/Bangkok', 'yyyy-MM-dd');
       var total = 0;
       rows.forEach(function (r) {
         total += Number(r.NetPay);
-        updateRowByIndex_(SHEET_NAMES.PAYROLL_RUNS, r._row, { Status: 'approved', PaidDate: today, UpdatedAt: nowIso(), UpdatedBy: session.employeeId });
+        updateRowByIndex_(SHEET_NAMES.PAYROLL_RUNS, r._row, { Status: 'approved', PaidDate: paidDate, UpdatedAt: nowIso(), UpdatedBy: session.employeeId });
       });
-      audit_(session.employeeId, session.role, 'APPROVE_RUN', month, rows.length + ' คน รวมสุทธิ ' + round2(total));
+      audit_(session.employeeId, session.role, 'APPROVE_RUN', month, rows.length + ' คน รวมสุทธิ ' + round2(total) + ' จ่ายวันที่ ' + paidDate);
+      return apiOk(true);
+    });
+  } catch (e) {
+    return apiError(e.message);
+  }
+}
+
+/** แก้วันที่จ่ายของรอบที่อนุมัติแล้ว (เช่น ธนาคารโอนจริงช้ากว่ากำหนด) */
+function setPayrollPaidDate(token, month, paidDate) {
+  try {
+    var session = requireAuth_(token, ['admin']);
+    if (!isValidDateKey(paidDate)) return apiError('วันที่จ่ายไม่ถูกต้อง (รูปแบบ YYYY-MM-DD)');
+    return withLock_(function () {
+      var rows = findAll_(SHEET_NAMES.PAYROLL_RUNS, 'Month', month);
+      if (!rows.length) return apiError('ยังไม่มีรอบจ่ายของเดือนนี้');
+      if (!rows.every(function (r) { return r.Status === 'approved'; })) return apiError('แก้วันที่จ่ายได้เฉพาะรอบที่อนุมัติแล้ว');
+      var before = rows[0].PaidDate;
+      rows.forEach(function (r) { updateRowByIndex_(SHEET_NAMES.PAYROLL_RUNS, r._row, { PaidDate: paidDate }); });
+      audit_(session.employeeId, session.role, 'SET_PAID_DATE', month, before + ' -> ' + paidDate);
       return apiOk(true);
     });
   } catch (e) {

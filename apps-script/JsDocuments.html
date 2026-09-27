@@ -1,0 +1,315 @@
+<script>
+  /**
+   * เอกสารประกอบการเบิกจ่ายตามแบบเดิมของโรงเรียน — สร้าง HTML ชุดเดียวใช้ทั้งพรีวิวบนจอ พิมพ์/PDF และส่งออก Word
+   * ข้อมูลมาจาก getDisbursementDocs (Documents.gs)
+   */
+  App.docs = {};
+
+  /** CSS เอกสาร: pt = ขนาดตัวอักษรหลัก (จอ/พิมพ์ใช้ Sarabun 12pt ≈ TH SarabunPSK 16pt ใน Word) */
+  App.docs.css = function (pt) {
+    var s = function (x) { return (Math.round(pt * x * 10) / 10) + 'pt'; };
+    return '.doc{font-family:"TH SarabunPSK","TH Sarabun New",Sarabun,sans-serif;font-size:' + s(1) + ';line-height:1.35;color:#000}' +
+      '.doc p{margin:0 0 3pt}.doc .center{text-align:center}.doc .right{text-align:right}.doc .b{font-weight:bold}' +
+      '.doc .indent{text-indent:2.5cm}.doc .small{font-size:' + s(0.85) + '}.doc .xs{font-size:' + s(0.75) + '}' +
+      '.doc .title{font-size:' + s(1.8) + ';font-weight:bold}.doc .h2{font-size:' + s(1.1) + ';font-weight:bold}' +
+      '.doc table{border-collapse:collapse}.doc table.tbl{width:100%}' +
+      '.doc table.tbl th,.doc table.tbl td{border:1px solid #000;padding:1pt 3pt;vertical-align:top}' +
+      '.doc table.tbl th{text-align:center;font-weight:bold;vertical-align:middle}' +
+      '.doc .num{text-align:right;white-space:nowrap}.doc .nowrap{white-space:nowrap}' +
+      '.doc tr.total td{font-weight:bold}.doc tr.group td{font-weight:bold;background:#f2f2f2}' +
+      '.doc table.plain td{padding:0 3pt;vertical-align:top}.doc .sig{text-align:center}';
+  };
+
+  function paper(inner, landscape) {
+    return '<div class="paper' + (landscape ? ' landscape' : '') + '"><div class="doc">' + inner + '</div></div>';
+  }
+  var esc = function (s) { return App.esc(s); };
+  var amt = function (n) { return App.amt(n); };
+
+  function signature(name, title, prefixLine) {
+    return '<div class="sig">' + (prefixLine || 'ลงชื่อ') + '.................................................<br>(' +
+      esc(name || '..................................................') + ')<br>' + esc(title || '') + '</div>';
+  }
+
+  // ------------------------------------------------------------------ 1) บันทึกข้อความ
+  /** form = { docNo, dateLabel, lines:[{description, amount, note}] } */
+  App.docs.memo = function (d, form) {
+    var total = form.lines.reduce(function (s, l) { return s + (Number(l.amount) || 0); }, 0);
+    var s = d.signers;
+    var approveBlock = function (name, title, director) {
+      return '<table class="plain" style="width:100%;margin-top:4pt"><tr>' +
+        '<td style="width:55%"><div>&nbsp;&nbsp;&nbsp;&nbsp;ทราบ</div>' +
+          '<div>&nbsp;&nbsp;&nbsp;&nbsp;พิจารณาแล้ว&nbsp;&nbsp;[&nbsp;&nbsp;&nbsp;] ' + (director ? 'อนุมัติจ่ายเงินตามแผน' : 'เห็นควรพิจารณา อนุมัติจ่ายเงินตามแผน') + '</div>' +
+          '<div style="padding-left:62pt">[&nbsp;&nbsp;&nbsp;] ..................................................</div></td>' +
+        '<td style="width:45%;padding-top:14pt">' + signature(name, 'ตำแหน่ง ' + (title || '')) + '</td></tr></table>';
+    };
+    return paper(
+      '<table class="plain" style="width:100%"><tr><td style="width:2cm"><img src="' + App.GARUDA + '" style="height:1.5cm" alt=""></td>' +
+        '<td class="center" style="vertical-align:middle"><span class="title">บันทึกข้อความ</span></td><td style="width:2cm"></td></tr></table>' +
+      '<p><span class="h2">ส่วนราชการ</span>&nbsp;&nbsp;' + esc(d.school.name) + ' ' + esc(d.school.address) + '</p>' +
+      '<table class="plain" style="width:100%"><tr><td><span class="h2">ที่</span>&nbsp;&nbsp;' + esc(form.docNo || '.............../..............') + '</td>' +
+        '<td><span class="h2">วันที่</span>&nbsp;&nbsp;' + esc(form.dateLabel) + '</td></tr></table>' +
+      '<p style="border-bottom:1px solid #000;padding-bottom:3pt"><span class="h2">เรื่อง</span>&nbsp;&nbsp;ขออนุมัติเงินค่าจ้างลูกจ้างชั่วคราว และเงินประกันสังคมสมทบ ประจำเดือน' + esc(d.monthLabel) + '</p>' +
+      '<p><span class="h2">เรียน</span>&nbsp;&nbsp;ผู้อำนวยการ' + esc(d.school.name) + '</p>' +
+      '<p class="indent">ด้วยฝ่ายการเงิน แจ้งความประสงค์ขอเบิกเงินเพื่อใช้ในการดำเนินจ่ายเงินเดือนบุคลากร' + esc(d.school.name) +
+        ' ตามแผนปฏิบัติงานปีงบประมาณ ' + d.fiscalYearBE + ' (' + esc(d.fiscalRangeText) + ') และมีรายการดังต่อไปนี้</p>' +
+      '<table class="tbl" style="margin:4pt 0"><thead><tr><th style="width:8%">ที่</th><th>รายการ</th><th style="width:20%">จำนวนเงิน (บาท)</th><th style="width:20%">หมายเหตุ</th></tr></thead><tbody>' +
+        form.lines.map(function (l, i) {
+          return '<tr><td class="center">' + (i + 1) + '.</td><td>' + esc(l.description) + '</td><td class="num">' + App.amt(l.amount, false) + '</td><td>' + esc(l.note) + '</td></tr>';
+        }).join('') +
+        '<tr class="total"><td colspan="2" class="center">รวมทั้งหมด</td><td class="num">' + App.amt(total, false) + '</td><td></td></tr>' +
+        '<tr><td colspan="4" class="center">ตัวหนังสือ&nbsp;&nbsp;(&nbsp;' + esc(App.bahtText(total)) + '&nbsp;)</td></tr>' +
+      '</tbody></table>' +
+      '<p class="indent">จึงเรียนมาเพื่อทราบ</p>' +
+      '<table class="plain" style="width:100%;margin-top:10pt"><tr><td style="width:45%"></td><td>' + signature(s.financeOfficerName, s.financeOfficerTitle) + '</td></tr></table>' +
+      '<p class="h2" style="margin-top:8pt">ความเห็นเพิ่มเติม</p>' +
+      approveBlock(s.budgetHeadName, s.budgetHeadTitle) +
+      approveBlock(s.deputyDirectorName, s.deputyDirectorTitle) +
+      approveBlock(s.directorName, s.directorTitle, true)
+    );
+  };
+
+  // ------------------------------------------------------------------ 2) ตารางเงินเดือน (หลักฐานการจ่าย)
+  App.docs.salaryColumns = function (d) {
+    var cols = [
+      { k: 'baseSalary', label: 'เงินเดือน', group: 'รายรับ', always: true },
+      { k: 'positionAllowance', label: 'ค่าตำแหน่ง', group: 'รายรับ' },
+      { k: 'onDutyPay', label: 'ค่าขึ้นเวร', group: 'รายรับ' },
+      { k: 'otherIncome', label: 'เงินเพิ่มพิเศษ / รับอื่นๆ', group: 'รายรับ', always: true },
+      { k: 'backPay', label: 'ตกเบิก', group: 'รายรับ' },
+      { k: 'grossPay', label: 'รวมรับ', group: 'รายรับ', always: true },
+      { k: 'ssoEmployee', label: 'ปกส.', group: 'รายจ่าย', always: true },
+      { k: 'compFundEmployee', label: 'กองทุนเงินทดแทน', group: 'รายจ่าย', always: true },
+      { k: 'otherDeduction', label: 'อื่นๆ', group: 'รายจ่าย', always: true },
+      { k: 'totalDeduction', label: 'รวมหัก', group: 'รายจ่าย', always: true },
+      { k: 'netPay', label: 'คงเหลือ', always: true },
+      { k: 'ssoEmployer', label: 'สมทบ ปกส. ร.ร.', always: true },
+      { k: 'compFundEmployer', label: 'สมทบ ทดแทน ร.ร.', always: true }
+    ];
+    return cols.filter(function (c) { return c.always || d.totals[c.k]; });
+  };
+
+  App.docs.salaryTable = function (d) {
+    var cols = App.docs.salaryColumns(d);
+    var inc = cols.filter(function (c) { return c.group === 'รายรับ'; });
+    var ded = cols.filter(function (c) { return c.group === 'รายจ่าย'; });
+    var rest = cols.filter(function (c) { return !c.group; });
+    var box = function (title, items) {
+      return '<table class="tbl" style="width:100%"><tr><th colspan="3">' + title + '</th></tr>' + items.map(function (x) {
+        return '<tr' + (x.total ? ' class="total"' : '') + '><td class="center" style="width:8%">' + x.no + '.</td><td>' + esc(x.label) + '</td><td class="num" style="width:26%">' + App.amt(x.amount, false) + ' บาท</td></tr>';
+      }).join('') + '</table>';
+    };
+    return paper(
+      '<p class="center h2">หลักฐานการจ่ายค่าจ้างสอนและค่าจ้างอื่นของบุคลากรทางการศึกษา ' + esc(d.school.name) + '</p>' +
+      '<p class="center">ประจำเดือน' + esc(d.monthLabel) + ' ประจำปีงบประมาณ ' + d.fiscalYearBE + ' (' + esc(d.fiscalRangeText) + ')' +
+        (d.approved ? ' &nbsp;·&nbsp; จ่ายวันที่ ' + esc(d.paidDateLabel) : ' &nbsp;·&nbsp; <b>(ร่าง ยังไม่อนุมัติ)</b>') + '</p>' +
+      '<table class="tbl small" style="margin-top:4pt"><thead>' +
+        '<tr><th rowspan="2">ลำดับ</th><th rowspan="2" colspan="2">ชื่อ-สกุล</th>' +
+          '<th colspan="' + inc.length + '">รายรับ</th><th colspan="' + ded.length + '">รายจ่าย</th>' +
+          rest.map(function (c) { return '<th rowspan="2">' + c.label + '</th>'; }).join('') +
+          '<th rowspan="2" style="width:9%">ลายมือชื่อ</th><th rowspan="2">หมายเลขบัญชี</th></tr>' +
+        '<tr>' + inc.concat(ded).map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr>' +
+      '</thead><tbody>' +
+        d.lines.map(function (l) {
+          return '<tr><td class="center">' + l.seq + '</td><td class="nowrap">' + esc(l.firstWithPrefix) + '</td><td class="nowrap">' + esc(l.lastName) + '</td>' +
+            inc.concat(ded, rest).map(function (c) { return '<td class="num">' + amt(l[c.k]) + '</td>'; }).join('') +
+            '<td></td><td class="nowrap">' + esc(l.bankAccountNo) + '</td></tr>';
+        }).join('') +
+        '<tr class="total"><td colspan="3" class="center">รวม</td>' +
+          inc.concat(ded, rest).map(function (c) { return '<td class="num">' + App.amt(d.totals[c.k], false) + '</td>'; }).join('') + '<td></td><td></td></tr>' +
+      '</tbody></table>' +
+      '<table class="plain small" style="width:100%;margin-top:6pt"><tr>' +
+        '<td style="width:49%">' + box('เงินรับ', d.summary.income) +
+          '<p class="center" style="margin-top:4pt">(' + esc(d.summary.grandTotalText) + ')</p></td><td style="width:2%"></td>' +
+        '<td style="width:49%">' + box('เงินหัก', d.summary.deduction) + '</td></tr></table>' +
+      '<table class="plain" style="width:100%;margin-top:10pt"><tr><td style="width:50%"></td><td>' + signature(d.signers.financeOfficerName, d.signers.financeOfficerTitle + ' (ผู้จัดทำ)') + '</td></tr></table>',
+      true);
+  };
+
+  // ------------------------------------------------------------------ 3) รายละเอียดเพิ่มเติม (แยกกลุ่มงาน)
+  App.docs.groupedLines = function (d) {
+    var groups = {};
+    d.lines.forEach(function (l) { (groups[l.group || 'ไม่ระบุกลุ่มงาน'] = groups[l.group || 'ไม่ระบุกลุ่มงาน'] || []).push(l); });
+    var names = d.groupOrder.filter(function (g) { return groups[g]; })
+      .concat(Object.keys(groups).filter(function (g) { return d.groupOrder.indexOf(g) === -1; }).sort());
+    return names.map(function (g) { return { group: g, lines: groups[g] }; });
+  };
+
+  App.docs.detail = function (d) {
+    var seq = 0;
+    var cols = ['baseSalary', 'extraIncome', 'backPay', 'ssoEmployer', 'compFundEmployer', 'budgetTotal'];
+    return paper(
+      '<p class="center h2">แบบรายงาน งบบุคลากร ค่าจ้างลูกจ้างชั่วคราว เดือน' + esc(d.monthLabel) + '</p>' +
+      '<p class="center">โรงเรียนที่เป็นหน่วยเบิก ' + esc(d.school.name) + ' สังกัด ' + esc(d.school.districtOffice) + '</p>' +
+      '<table class="tbl small" style="margin-top:4pt"><thead><tr>' +
+        '<th>ลำดับ</th><th colspan="2">ชื่อ-สกุล</th><th>เงินเดือน</th><th>เงินเพิ่มพิเศษ</th><th>ค่าอื่นๆ (ตกเบิก)</th>' +
+        '<th>สมทบ ปกส. 5%</th><th>สมทบกองทุนเงินทดแทน</th><th>รวม (บาท)</th><th>หมายเหตุ 1</th><th>หมายเหตุ 2</th></tr></thead><tbody>' +
+        App.docs.groupedLines(d).map(function (g) {
+          return '<tr class="group"><td></td><td colspan="10">' + esc(g.group) + '</td></tr>' + g.lines.map(function (l) {
+            seq++;
+            return '<tr><td class="center">' + seq + '</td><td class="nowrap">' + esc(l.firstWithPrefix) + '</td><td class="nowrap">' + esc(l.lastName) + '</td>' +
+              cols.map(function (k) { return '<td class="num">' + amt(l[k]) + '</td>'; }).join('') +
+              '<td>' + esc(l.note1) + '</td><td>' + esc(l.note2) + '</td></tr>';
+          }).join('');
+        }).join('') +
+        '<tr class="total"><td colspan="3" class="center">รวม</td>' + cols.map(function (k) { return '<td class="num">' + App.amt(d.totals[k], false) + '</td>'; }).join('') +
+          '<td colspan="2"></td></tr>' +
+      '</tbody></table>' +
+      '<p class="small" style="margin-top:4pt">รวมทั้งสิ้น ' + App.amt(d.totals.budgetTotal, false) + ' บาท (' + esc(App.bahtText(d.totals.budgetTotal)) + ')</p>' +
+      '<table class="plain" style="width:100%;margin-top:10pt"><tr><td style="width:50%"></td><td>' + signature(d.signers.financeOfficerName, d.signers.financeOfficerTitle + ' (ผู้รายงาน)') + '</td></tr></table>',
+      true);
+  };
+
+  // ------------------------------------------------------------------ 4) เอกสารส่งธนาคาร
+  /** form = { docNo, dateLabel } */
+  App.docs.bank = function (d, form) {
+    var sc = d.school, s = d.signers;
+    var letter = paper(
+      '<div class="center"><img src="' + App.GARUDA + '" style="height:3cm" alt=""></div>' +
+      '<table class="plain" style="width:100%"><tr><td style="width:50%">ที่ ' + esc(form.docNo || '.............../..............') + '</td>' +
+        '<td>' + esc(sc.name) + '<br>' + esc(sc.address) + '</td></tr></table>' +
+      '<p style="margin:6pt 0 6pt 50%">' + esc(form.dateLabel) + '</p>' +
+      '<p><span class="b">เรื่อง</span>&nbsp;&nbsp;ขอให้โอนเงินค่าจ้างลูกจ้างชั่วคราว ประจำเดือน' + esc(d.monthLabel) + '</p>' +
+      '<p><span class="b">เรียน</span>&nbsp;&nbsp;ผู้จัดการ' + esc(sc.bankName || 'ธนาคาร..............................') + (sc.bankBranch ? ' สาขา' + esc(sc.bankBranch) : '') + '</p>' +
+      '<p><span class="b">สิ่งที่ส่งมาด้วย</span>&nbsp;&nbsp;รายชื่อ เลขที่บัญชี และจำนวนเงินของผู้รับโอน จำนวน 1 ชุด</p>' +
+      '<p class="indent" style="margin-top:6pt">ด้วย' + esc(sc.name) + ' มีความประสงค์ขอให้ธนาคารโอนเงินจากบัญชี' +
+        (sc.bankAccountName ? ' "' + esc(sc.bankAccountName) + '"' : '') + ' เลขที่บัญชี ' + esc(sc.bankAccountNo || '..............................') +
+        ' จำนวนเงินทั้งสิ้น ' + App.amt(d.totals.netPay, false) + ' บาท (' + esc(d.totalsNetText) + ') เข้าบัญชีเงินฝากของลูกจ้างชั่วคราว จำนวน ' +
+        d.lines.length + ' ราย ตามรายละเอียดที่แนบมาพร้อมนี้ ในวันที่ ' + esc(d.paidDateLabel) + '</p>' +
+      '<p class="indent">จึงเรียนมาเพื่อโปรดดำเนินการ</p>' +
+      '<p style="margin:10pt 0 0 50%" class="center">ขอแสดงความนับถือ</p>' +
+      '<table class="plain" style="width:100%;margin-top:28pt"><tr><td style="width:50%">' + signature(s.financeOfficerName, s.financeOfficerTitle) + '</td>' +
+        '<td>' + signature(s.directorName, s.directorTitle) + '</td></tr></table>' +
+      '<p class="small" style="margin-top:40pt">' + esc(sc.name) + ' ฝ่ายการเงิน</p>');
+    var list = paper(
+      '<p class="center h2">การจ่ายเงินเดือนอัตราจ้างชั่วคราว ' + esc(sc.name) + ' เดือน' + esc(d.monthLabel) + '</p>' +
+      '<p class="center">โอนเข้าบัญชีวันที่ ' + esc(d.paidDateLabel) + (sc.bankName ? ' · ' + esc(sc.bankName) : '') + '</p>' +
+      '<table class="tbl" style="margin-top:6pt"><thead><tr><th style="width:8%">ลำดับ</th><th colspan="2">ชื่อ-สกุล</th><th>หมายเลขบัญชี</th><th>จำนวนเงิน</th></tr></thead><tbody>' +
+        d.lines.map(function (l) {
+          return '<tr><td class="center">' + l.seq + '</td><td>' + esc(l.firstWithPrefix) + '</td><td>' + esc(l.lastName) + '</td>' +
+            '<td class="center">' + esc(l.bankAccountNo) + '</td><td class="num">' + App.amt(l.netPay, false) + '</td></tr>';
+        }).join('') +
+        '<tr class="total"><td colspan="4" class="center">รวม</td><td class="num">' + App.amt(d.totals.netPay, false) + '</td></tr>' +
+      '</tbody></table>' +
+      '<p class="center" style="margin-top:4pt">(' + esc(d.totalsNetText) + ')</p>' +
+      '<table class="plain" style="width:100%;margin-top:18pt"><tr><td style="width:50%">' + signature(s.financeOfficerName, s.financeOfficerTitle + ' (ผู้จัดทำ)') + '</td>' +
+        '<td>' + signature(s.directorName, s.directorTitle + ' (ผู้อนุมัติ)') + '</td></tr></table>');
+    return letter + list;
+  };
+
+  // ------------------------------------------------------------------ ส่งออก Word (.doc แบบ MHTML พร้อมรูปครุฑ)
+  function b64Utf8(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/.{76}/g, '$&\r\n');
+  }
+
+  App.docs.exportWord = function (filename, html, landscape) {
+    var boundary = '----=_NextPart_CWK_' + Date.now();
+    var imgPath = 'file:///C:/cwk/garuda.jpg';
+    var body = html.split(App.GARUDA).join(imgPath)
+      .replace(/<div class="paper[^"]*"><div class="doc">/g, '<div class="doc">')
+      .replace(/<\/div><\/div>(?=<div class="doc">|$)/g, '</div><br style="page-break-before:always;mso-break-type:section-break" clear="all">')
+      .replace(/<br style="page-break-before[^>]*>$/, '');
+    var page = landscape ? 'size:29.7cm 21cm;mso-page-orientation:landscape;margin:1.2cm 1.2cm 1.2cm 1.5cm' : 'size:21cm 29.7cm;margin:1.5cm 2cm 1.2cm 3cm';
+    var doc = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
+      '<head><meta charset="utf-8"><style>@page WordSection1{' + page + '}div.WordSection1{page:WordSection1}' + App.docs.css(16) + '</style></head>' +
+      '<body><div class="WordSection1">' + body + '</div></body></html>';
+    var mht = 'MIME-Version: 1.0\r\nContent-Type: multipart/related; boundary="' + boundary + '"\r\n\r\n' +
+      '--' + boundary + '\r\nContent-Type: text/html; charset="utf-8"\r\nContent-Transfer-Encoding: base64\r\nContent-Location: file:///C:/cwk/document.htm\r\n\r\n' +
+      b64Utf8(doc) + '\r\n\r\n' +
+      '--' + boundary + '\r\nContent-Type: image/jpeg\r\nContent-Transfer-Encoding: base64\r\nContent-Location: ' + imgPath + '\r\n\r\n' +
+      App.GARUDA.split(',')[1].replace(/.{76}/g, '$&\r\n') + '\r\n\r\n--' + boundary + '--\r\n';
+    var blob = new Blob([mht], { type: 'application/msword' });
+    App.downloadBlob(filename, blob);
+  };
+
+  App.downloadBlob = function (filename, blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+  };
+
+  // ------------------------------------------------------------------ ส่งออก Excel (3 ชีตแบบไฟล์เดิม)
+  App.docs.exportExcel = function (d) {
+    return App.loadScript(App.XLSX_URL).then(function () {
+      var wb = XLSX.utils.book_new();
+      var text = function (v) { return { t: 's', v: String(v || '') }; };
+
+      // ชีต "เงินเดือน"
+      var cols = App.docs.salaryColumns(d);
+      var inc = cols.filter(function (c) { return c.group === 'รายรับ'; });
+      var ded = cols.filter(function (c) { return c.group === 'รายจ่าย'; });
+      var rest = cols.filter(function (c) { return !c.group; });
+      var ordered = inc.concat(ded, rest);
+      var width = 3 + ordered.length + 2;
+      var aoa = [
+        ['หลักฐานการจ่ายค่าจ้างสอนและค่าจ้างอื่นของบุคลากรทางการศึกษา  ' + d.school.name],
+        ['ประจำเดือน' + d.monthLabel + ' ประจำปีงบประมาณ ' + d.fiscalYearBE + ' (' + d.fiscalRangeText + ')' + (d.approved ? '  จ่ายวันที่ ' + d.paidDateLabel : '')],
+        ['ลำดับ', 'ชื่อ-สกุล', ''].concat(inc.map(function (c, i) { return i ? '' : 'รายรับ'; }), ded.map(function (c, i) { return i ? '' : 'รายจ่าย'; }),
+          rest.map(function (c) { return c.label; }), ['ลายมือชื่อ', 'หมายเลขบัญชี']),
+        ['', '', ''].concat(inc.concat(ded).map(function (c) { return c.label; }), rest.map(function () { return ''; }), ['', ''])
+      ];
+      d.lines.forEach(function (l) {
+        aoa.push([l.seq, l.firstWithPrefix, l.lastName].concat(ordered.map(function (c) { return l[c.k]; }), ['', text(l.bankAccountNo)]));
+      });
+      aoa.push(['รวม', '', ''].concat(ordered.map(function (c) { return d.totals[c.k]; }), ['', '']));
+      aoa.push([]);
+      var boxRows = Math.max(d.summary.income.length, d.summary.deduction.length);
+      aoa.push(['', 'เงินรับ', '', '', '', '', 'เงินหัก']);
+      for (var i = 0; i < boxRows; i++) {
+        var a = d.summary.income[i], b = d.summary.deduction[i];
+        aoa.push(['', a ? a.no + '. ' + a.label : '', '', '', a ? a.amount : '', '', b ? b.no + '. ' + b.label : '', '', '', '', b ? b.amount : '']);
+      }
+      aoa.push(['', '(' + d.summary.grandTotalText + ')']);
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: width - 1 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: width - 1 } },
+        { s: { r: 2, c: 1 }, e: { r: 3, c: 2 } }, { s: { r: 2, c: 0 }, e: { r: 3, c: 0 } },
+        { s: { r: 2, c: 3 }, e: { r: 2, c: 3 + inc.length - 1 } }, { s: { r: 2, c: 3 + inc.length }, e: { r: 2, c: 3 + inc.length + ded.length - 1 } }
+      ];
+      ws['!cols'] = [{ wch: 6 }, { wch: 20 }, { wch: 14 }].concat(ordered.map(function () { return { wch: 11 }; }), [{ wch: 12 }, { wch: 15 }]);
+      XLSX.utils.book_append_sheet(wb, ws, 'เงินเดือน');
+
+      // ชีต "รายละเอียดเพิ่มเติม"
+      var dk = ['baseSalary', 'extraIncome', 'backPay', 'ssoEmployer', 'compFundEmployer', 'budgetTotal'];
+      var aoa2 = [
+        ['แบบรายงาน งบบุคลากร ค่าจ้างลูกจ้างชั่วคราว  เดือน' + d.monthLabel],
+        ['โรงเรียนที่เป็นหน่วยเบิก  ' + d.school.name + ' สังกัด ' + d.school.districtOffice],
+        ['ลำดับ', 'ชื่อ-สกุล', '', 'เงินเดือน', 'เงินเพิ่มพิเศษ', 'ค่าอื่นๆ (ตกเบิก)', 'สมทบ ปกส. 5%', 'สมทบกองทุนเงินทดแทน', 'รวม(บาท)', 'หมายเหตุ 1', 'หมายเหตุ 2']
+      ];
+      var seq = 0;
+      App.docs.groupedLines(d).forEach(function (g) {
+        aoa2.push([g.group]);
+        g.lines.forEach(function (l) {
+          seq++;
+          aoa2.push([seq, l.firstWithPrefix, l.lastName].concat(dk.map(function (k) { return l[k]; }), [l.note1, l.note2]));
+        });
+      });
+      aoa2.push(['รวม', '', ''].concat(dk.map(function (k) { return d.totals[k]; })));
+      var ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+      ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }, { s: { r: 1, c: 0 }, e: { r: 1, c: 10 } }, { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } }];
+      ws2['!cols'] = [{ wch: 6 }, { wch: 20 }, { wch: 14 }, { wch: 11 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 22 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียดเพิ่มเติม');
+
+      // ชีต "ส่งธนาคาร"
+      var aoa3 = [['การจ่ายเงินเดือนอัตราจ้างชั่วคราว ' + d.school.name + ' เดือน' + d.monthLabel + '  (โอนวันที่ ' + d.paidDateLabel + ')'],
+        ['ลำดับ', 'ชื่อ-สกุล', '', 'หมายเลขบัญชี', 'จำนวนเงิน']];
+      d.lines.forEach(function (l) { aoa3.push([l.seq, l.firstWithPrefix, l.lastName, text(l.bankAccountNo), l.netPay]); });
+      aoa3.push(['รวม', '', '', '', d.totals.netPay]);
+      aoa3.push(['(' + d.totalsNetText + ')']);
+      var ws3 = XLSX.utils.aoa_to_sheet(aoa3);
+      ws3['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }, { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } }];
+      ws3['!cols'] = [{ wch: 6 }, { wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
+      XLSX.utils.book_append_sheet(wb, ws3, 'ส่งธนาคาร');
+
+      var out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      App.downloadBlob('payroll-documents-' + d.month + '.xlsx', new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    });
+  };
+</script>

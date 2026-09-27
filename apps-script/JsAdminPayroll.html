@@ -43,6 +43,9 @@
           '<div class="flex items-center gap-2">' +
             '<span class="text-lg font-semibold">' + App.esc(run.monthLabel) + '</span>' +
             '<span class="badge ' + (approved ? 'badge-approved' : 'badge-draft') + '">' + (approved ? 'อนุมัติแล้ว' : 'แบบร่าง') + '</span>' +
+            (approved ? '<span class="text-sm text-gray-600">จ่ายวันที่ <b>' + App.esc(run.paidDateLabel) + '</b></span>' +
+              '<button id="btn-paid-date" class="text-xs text-brand-600 hover:underline">แก้วันที่จ่าย</button>' : '') +
+            (run.source ? '<span class="badge bg-gray-100 text-gray-600" title="' + App.esc(run.source) + '">นำเข้าจากไฟล์</span>' : '') +
           '</div>' +
           '<div class="flex gap-2">' +
             '<button id="btn-print-slips" class="btn btn-secondary">พิมพ์สลิปทั้งหมด</button>' +
@@ -73,6 +76,13 @@
 
       document.getElementById('btn-print-slips').onclick = printAll;
       if (approved) {
+        document.getElementById('btn-paid-date').onclick = function () {
+          App.pickDate('แก้วันที่จ่าย ' + run.monthLabel, 'ใช้เมื่อธนาคารโอนเงินจริงไม่ตรงกับวันที่บันทึกไว้ (บันทึกในประวัติการใช้งาน)', run.paidDate, 'บันทึก').then(function (d) {
+            if (!d) return;
+            App.call('setPayrollPaidDate', run.month, d).then(function () { App.toast('แก้วันที่จ่ายแล้ว', 'success'); loadRun(run.month); })
+              .catch(function (err) { App.toast(err.message, 'error'); });
+          });
+        };
         document.getElementById('btn-reopen').onclick = function () {
           App.prompt('เปิดรอบ ' + run.monthLabel + ' เพื่อแก้ไข? สลิปที่ลูกจ้างเห็นอยู่จะถูกซ่อนจนกว่าจะอนุมัติใหม่ กรุณาระบุเหตุผล (บันทึกในประวัติการใช้งาน)', 'เช่น แก้ไขค่าขึ้นเวรของ Cwk005', 'เปิดรอบแก้ไข').then(function (reason) {
             if (!reason) return;
@@ -81,9 +91,10 @@
         };
       } else {
         document.getElementById('btn-approve').onclick = function () {
-          App.confirm('อนุมัติและปิดรอบจ่ายเดือน ' + run.monthLabel + '? หลังจากนี้ลูกจ้างจะเห็นสลิปของตัวเองทันที').then(function (ok) {
-            if (!ok) return;
-            App.call('approvePayrollRun', run.month).then(function () {
+          App.pickDate('อนุมัติรอบจ่าย ' + run.monthLabel, 'ยอดโอนสุทธิรวม ' + App.money(run.totals.netPay) + ' บาท (' + run.lines.length + ' คน) หลังอนุมัติลูกจ้างจะเห็นสลิปของตัวเองทันที วันที่นี้จะแสดงบนสลิปและเอกสารเบิกจ่ายทุกฉบับ',
+            run.defaultPaidDate, 'อนุมัติ').then(function (paidDate) {
+            if (!paidDate) return;
+            App.call('approvePayrollRun', run.month, paidDate).then(function () {
               App.toast('อนุมัติรอบจ่ายสำเร็จ', 'success');
               loadRun(run.month);
             }).catch(function (err) { App.toast(err.message, 'error'); });

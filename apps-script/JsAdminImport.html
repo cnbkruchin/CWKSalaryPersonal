@@ -1,0 +1,249 @@
+<script>
+  /** โหลดสคริปต์ภายนอกเมื่อจำเป็นเท่านั้น (เช่น SheetJS สำหรับอ่าน/สร้างไฟล์ Excel ในหลังบ้าน) */
+  App.loadScript = (function () {
+    var loaded = {};
+    return function (url) {
+      if (!loaded[url]) {
+        loaded[url] = new Promise(function (resolve, reject) {
+          var s = document.createElement('script');
+          s.src = url;
+          s.onload = resolve;
+          s.onerror = function () { delete loaded[url]; reject(new Error('โหลดไลบรารีไม่สำเร็จ ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต')); };
+          document.head.appendChild(s);
+        });
+      }
+      return loaded[url];
+    };
+  })();
+  App.XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+
+  /** อ่านไฟล์ Excel เป็น [{name, rows}] — วันที่แปลงเป็น 'YYYY-MM-DD', เลขแถวตรงกับ Excel */
+  App.readWorkbook = function (file) {
+    return App.loadScript(App.XLSX_URL).then(function () {
+      return file.arrayBuffer();
+    }).then(function (buf) {
+      var wb = XLSX.read(buf, { type: 'array', cellDates: true });
+      var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+      return wb.SheetNames.map(function (name) {
+        var ws = wb.Sheets[name];
+        var range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
+        var out = [];
+        for (var i = 0; i < range.s.r; i++) out.push([]);
+        rows.forEach(function (r) {
+          out.push(r.map(function (v) {
+            return v instanceof Date ? v.getFullYear() + '-' + pad(v.getMonth() + 1) + '-' + pad(v.getDate()) : v;
+          }));
+        });
+        while (out.length && out[out.length - 1].every(function (v) { return v === ''; })) out.pop();
+        return { name: name, rows: out.slice(0, 2000) };
+      });
+    });
+  };
+
+  var IMPORT_FIELD_LABEL = {
+    employeeId: 'รหัสพนักงาน', prefix: 'คำนำหน้า', firstName: 'ชื่อ', lastName: 'นามสกุล', fullName: 'ชื่อ-สกุล', position: 'ตำแหน่ง',
+    bankAccount: 'เลขบัญชี', monthCell: 'ประจำเดือน', baseSalary: 'เงินเดือน', baseAdjust: 'ปรับฐาน (→ รับอื่นๆ)', positionAllowance: 'เงินประจำตำแหน่ง',
+    onDutyPay: 'ค่าขึ้นเวร', otherIncome: 'รับอื่นๆ', backPay: 'ตกเบิก', ssoEmployee: 'ประกันสังคม (ลูกจ้าง)', compFundEmployee: 'กองทุนทดแทน (หัก)',
+    otherDeduction: 'หักอื่นๆ', ssoEmployer: 'สมทบ ปกส. (โรงเรียน)', compFundEmployer: 'สมทบกองทุนทดแทน (โรงเรียน)', grossCheck: 'รวมรับ (ใช้ตรวจ)',
+    deductionCheck: 'รวมหัก (ใช้ตรวจ)', netCheck: 'คงเหลือ (ใช้ตรวจ)', note: 'หมายเหตุ'
+  };
+
+  App.views.adminImport = function (root) {
+    var state = { fileName: '', sheets: null, sheetIndex: null, month: '', preview: null, assignments: {} };
+
+    root.innerHTML = App.adminShell('import', '<div id="import-body" class="p-4 sm:p-6 max-w-6xl"></div>');
+    renderPick();
+
+    function body() { return document.getElementById('import-body'); }
+
+    function renderPick() {
+      body().innerHTML =
+        '<p class="text-sm text-gray-500 mb-4">นำเข้าข้อมูลการจ่ายเงินเดือนย้อนหลังจากไฟล์ Excel เดิม ระบบจะสร้างเป็นรอบจ่ายที่อนุมัติแล้วพร้อมวันที่จ่าย ' +
+          'ลูกจ้างจะเห็นสลิปย้อนหลังได้ทันที และใช้ออกเอกสารเบิกจ่ายได้เหมือนรอบปกติ</p>' +
+        '<label id="drop" for="file-input" class="card flex flex-col items-center justify-center text-center p-10 border-2 border-dashed border-brand-200 cursor-pointer hover:bg-brand-50 transition">' +
+          '<div class="w-12 h-12 text-brand-500 mb-2">' + App.icon('slip') + '</div>' +
+          '<div class="font-semibold">เลือกไฟล์ Excel (.xlsx) หรือลากไฟล์มาวางที่นี่</div>' +
+          '<div class="text-sm text-gray-500 mt-1">อ่านไฟล์ในเครื่องของคุณ ระบบยังไม่บันทึกอะไรจนกว่าจะกดยืนยัน</div>' +
+          '<input id="file-input" type="file" accept=".xlsx,.xls,.xlsm,.csv" class="sr-only">' +
+        '</label>' +
+        '<div class="card p-5 mt-4 text-sm text-gray-600">' +
+          '<h2 class="font-semibold text-gray-800 mb-2">รูปแบบไฟล์ที่รองรับ</h2>' +
+          '<ul class="list-disc pl-5 space-y-1">' +
+            '<li>ไฟล์ <b>"เงินเดือน"</b> (หลักฐานการจ่ายค่าจ้าง) — หัวตาราง 2 แถว รายรับ/รายจ่าย และแถว "รวม" ปิดท้าย</li>' +
+            '<li>ไฟล์ <b>SlipSheet</b> — 1 แถวต่อคน มีรหัสพนักงาน คำนำหน้า ชื่อ นามสกุล เงินเดือน เงินประจำตำแหน่ง ค่าขึ้นเวร ฯลฯ</li>' +
+            '<li>ตารางอื่นที่มีคอลัมน์ <b>ชื่อ</b> และ <b>เงินเดือน</b> — ระบบหาหัวตารางและจับคู่คอลัมน์จากชื่อหัวคอลัมน์ให้อัตโนมัติ</li>' +
+          '</ul>' +
+          '<p class="mt-2">เดือนของข้อมูลอ่านจากหัวเอกสาร (เช่น "ประจำเดือนกันยายน 2569"), คอลัมน์ประจำเดือน หรือชื่อชีต — แก้ไขได้ก่อนยืนยัน</p>' +
+        '</div>';
+      var input = document.getElementById('file-input');
+      input.onchange = function () { if (input.files[0]) readFile(input.files[0]); };
+      var drop = document.getElementById('drop');
+      drop.ondragover = function (e) { e.preventDefault(); drop.classList.add('bg-brand-50'); };
+      drop.ondragleave = function () { drop.classList.remove('bg-brand-50'); };
+      drop.ondrop = function (e) { e.preventDefault(); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
+    }
+
+    function readFile(file) {
+      body().innerHTML = '<div class="card p-8 text-center text-gray-500">กำลังอ่านไฟล์ ' + App.esc(file.name) + ' ...</div>';
+      App.readWorkbook(file).then(function (sheets) {
+        state = { fileName: file.name, sheets: sheets, sheetIndex: null, month: '', preview: null, assignments: {} };
+        preview();
+      }).catch(function (err) {
+        App.toast('อ่านไฟล์ไม่สำเร็จ: ' + err.message, 'error');
+        renderPick();
+      });
+    }
+
+    function preview() {
+      App.call('previewPayrollImport', { sheets: state.sheets, sheetIndex: state.sheetIndex, month: state.month }).then(function (pv) {
+        state.preview = pv;
+        state.sheetIndex = pv.sheetIndex;
+        state.month = pv.month;
+        state.paidDate = state.paidDate || pv.defaultPaidDate;
+        state.assignments = {};
+        pv.lines.forEach(function (l) { state.assignments[l.rowNo] = l.match ? l.match.employeeId : ''; });
+        renderPreview();
+      }).catch(function (err) { App.toast(err.message, 'error'); renderPick(); });
+    }
+
+    function renderPreview() {
+      var pv = state.preview;
+      var matched = pv.lines.filter(function (l) { return l.match; }).length;
+      var warned = pv.lines.filter(function (l) { return l.warnings.length; }).length;
+      var empOptions = pv.employees.map(function (e) {
+        return '<option value="' + App.esc(e.employeeId) + '">' + App.esc(e.employeeId + ' · ' + e.fullName) + (e.status !== 'active' ? ' (ปิดใช้งาน)' : '') + '</option>';
+      }).join('');
+
+      body().innerHTML =
+        '<div class="card p-5">' +
+          '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+            '<div><div class="text-xs text-gray-500">ไฟล์</div><div class="font-semibold">' + App.esc(state.fileName) + '</div>' +
+              '<div class="text-xs text-gray-500">หัวตารางแถวที่ ' + (pv.headerRow > 0 ? pv.headerRow : '-') + '</div></div>' +
+            '<button id="btn-other-file" class="btn btn-secondary">เลือกไฟล์อื่น</button>' +
+          '</div>' +
+          '<div class="grid sm:grid-cols-4 gap-3 mt-4">' +
+            '<div><label class="label" for="imp-sheet">ชีต</label><select id="imp-sheet" class="input">' +
+              pv.sheetNames.map(function (n, i) { return '<option value="' + i + '"' + (i === pv.sheetIndex ? ' selected' : '') + '>' + App.esc(n) + '</option>'; }).join('') + '</select></div>' +
+            '<div><label class="label" for="imp-month">ข้อมูลประจำเดือน</label><input id="imp-month" type="month" class="input" value="' + App.esc(state.month) + '" required>' +
+              '<div class="text-xs text-gray-500 mt-1">' + App.esc(pv.monthLabel || 'ระบุเดือน') + '</div></div>' +
+            '<div><label class="label" for="imp-paid">วันที่จ่ายเงินเดือน</label><input id="imp-paid" type="date" class="input" value="' + App.esc(state.paidDate || '') + '" required></div>' +
+            '<div><label class="label" for="imp-newstatus">ลูกจ้างที่สร้างใหม่จากไฟล์</label><select id="imp-newstatus" class="input">' +
+              '<option value="active">ใช้งาน (ยังทำงานอยู่)</option><option value="inactive">ปิดใช้งาน (ลาออกแล้ว)</option></select></div>' +
+          '</div>' +
+          (pv.existingRun ? '<label class="flex items-start gap-2 mt-4 rounded-xl bg-amber-50 text-amber-900 text-sm px-4 py-3"><input type="checkbox" id="imp-replace" class="mt-1"> ' +
+            '<span>มีรอบจ่ายของเดือนนี้อยู่แล้ว ' + pv.existingRun.count + ' รายการ (' + (pv.existingRun.status === 'approved' ? 'อนุมัติแล้ว' : 'แบบร่าง') + ') — ' +
+            '<b>แทนที่ข้อมูลเดิมทั้งเดือนด้วยข้อมูลจากไฟล์นี้</b> (บันทึกในประวัติการใช้งาน)</span></label>' : '') +
+          (pv.problems.length ? '<div class="mt-4 rounded-xl bg-red-50 text-red-800 text-sm px-4 py-3">' + pv.problems.map(App.esc).join('<br>') + '</div>' : '') +
+        '</div>' +
+
+        '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">' +
+          miniTile('แถวข้อมูล', pv.lines.length + ' คน') +
+          miniTile('จับคู่ทะเบียนได้', matched + ' / ' + pv.lines.length) +
+          miniTile('ต้องตรวจสอบ', warned + ' แถว') +
+          miniTile('ยอดสุทธิรวม', App.money(pv.totals.net)) +
+        '</div>' +
+
+        '<details class="card p-4 mt-4 text-sm"><summary class="cursor-pointer font-semibold">คอลัมน์ที่ระบบจับคู่ได้</summary><div class="mt-2 flex flex-wrap gap-1.5">' +
+          pv.columns.map(function (c) {
+            return '<span class="badge ' + (c.field ? 'bg-brand-50 text-brand-800' : 'bg-gray-100 text-gray-500') + '">' + App.esc(c.header) +
+              (c.field ? ' → ' + App.esc(IMPORT_FIELD_LABEL[c.field] || c.field) : ' (ไม่ใช้)') + '</span>';
+          }).join('') + '</div></details>' +
+
+        '<div class="card overflow-x-auto mt-4"><table class="table-clean w-full">' +
+          '<thead><tr><th>แถว</th><th>ชื่อในไฟล์</th><th class="text-right">เงินเดือน</th><th class="text-right">รวมรับ</th><th class="text-right">รวมหัก</th><th class="text-right">สุทธิ</th><th>ลูกจ้างในระบบ</th></tr></thead><tbody>' +
+          pv.lines.map(function (l) {
+            var cur = state.assignments[l.rowNo] || '';
+            return '<tr class="' + (l.warnings.length ? 'bg-amber-50/60' : '') + '">' +
+              '<td class="text-xs text-gray-400">' + l.rowNo + '</td>' +
+              '<td><div>' + App.esc(l.displayName) + '</div><div class="text-xs text-gray-400 font-mono">' + App.esc([l.employeeId, l.bankAccount].filter(Boolean).join(' · ')) + '</div>' +
+                (l.warnings.length ? '<div class="text-xs text-amber-800 mt-0.5">⚠ ' + l.warnings.map(App.esc).join('<br>⚠ ') + '</div>' : '') + '</td>' +
+              '<td class="text-right tabular-nums">' + App.money(l.baseSalary) + '</td>' +
+              '<td class="text-right tabular-nums">' + App.money(l.gross) + '</td>' +
+              '<td class="text-right tabular-nums">' + App.money(l.totalDeduction) + '</td>' +
+              '<td class="text-right tabular-nums font-semibold">' + App.money(l.net) + '</td>' +
+              '<td><select class="input !py-1 text-sm min-w-[14rem] assign" data-row="' + l.rowNo + '">' +
+                '<option value="">— เลือก —</option>' +
+                '<option value="__new__">+ สร้างลูกจ้างใหม่จากแถวนี้</option>' +
+                '<option value="__skip__">ข้ามแถวนี้</option>' + empOptions + '</select>' +
+                (l.match ? '<div class="text-xs text-green-700 mt-0.5">✓ จับคู่จาก' + App.esc(l.match.by) + '</div>' : '<div class="text-xs text-amber-700 mt-0.5">ไม่พบในทะเบียน</div>') +
+              '</td></tr>';
+          }).join('') +
+          '<tr class="font-bold"><td></td><td>รวม</td><td></td><td class="text-right">' + App.money(pv.totals.gross) + '</td>' +
+            '<td class="text-right">' + App.money(pv.totals.sso + pv.totals.otherDeduction) + '</td><td class="text-right">' + App.money(pv.totals.net) + '</td><td></td></tr>' +
+          '</tbody></table></div>' +
+        '<p class="text-xs text-gray-500 mt-2">ยอดสุทธิรวม: ' + App.esc(pv.totalsText) + ' — ระบบคำนวณจากรายการในไฟล์ และแจ้งเตือนถ้าไม่ตรงกับช่อง "รวมรับ/คงเหลือ" ของไฟล์</p>' +
+
+        '<div class="flex justify-end gap-2 mt-4 mb-10">' +
+          '<button id="btn-cancel" class="btn btn-secondary">ยกเลิก</button>' +
+          '<button id="btn-commit" class="btn btn-primary btn-lg"' + (pv.lines.length ? '' : ' disabled') + '>นำเข้า ' + pv.lines.length + ' รายการ</button>' +
+        '</div>';
+
+      body().querySelectorAll('select.assign').forEach(function (sel) {
+        sel.value = state.assignments[sel.getAttribute('data-row')] || '';
+        sel.onchange = function () { state.assignments[sel.getAttribute('data-row')] = sel.value; };
+      });
+      document.getElementById('btn-other-file').onclick = renderPick;
+      document.getElementById('btn-cancel').onclick = renderPick;
+      document.getElementById('imp-sheet').onchange = function () { state.sheetIndex = Number(this.value); state.month = ''; state.paidDate = ''; preview(); };
+      document.getElementById('imp-month').onchange = function () { state.month = this.value; state.paidDate = ''; preview(); };
+      document.getElementById('imp-paid').onchange = function () { state.paidDate = this.value; };
+      document.getElementById('btn-commit').onclick = commit;
+    }
+
+    function miniTile(caption, value) {
+      return '<div class="card p-4 stat-tile"><div class="caption">' + caption + '</div><div class="value !text-xl mt-1">' + value + '</div></div>';
+    }
+
+    function commit() {
+      var pv = state.preview;
+      var missing = pv.lines.filter(function (l) { return !state.assignments[l.rowNo]; });
+      if (missing.length) {
+        App.toast('ยังไม่ได้เลือกลูกจ้างสำหรับแถว ' + missing.map(function (l) { return l.rowNo; }).join(', '), 'error');
+        return;
+      }
+      var replaceBox = document.getElementById('imp-replace');
+      if (pv.existingRun && !(replaceBox && replaceBox.checked)) {
+        App.toast('มีรอบจ่ายของเดือนนี้อยู่แล้ว — ติ๊ก "แทนที่ข้อมูลเดิม" ถ้าต้องการนำเข้าทับ', 'error');
+        return;
+      }
+      var paidDate = document.getElementById('imp-paid').value;
+      var toImport = pv.lines.filter(function (l) { return state.assignments[l.rowNo] !== '__skip__'; }).length;
+      App.confirm('นำเข้าข้อมูล ' + pv.monthLabel + ' จำนวน ' + toImport + ' คน วันที่จ่าย ' + paidDate + ' เป็นรอบจ่ายที่อนุมัติแล้ว?', 'นำเข้า').then(function (ok) {
+        if (!ok) return;
+        var btn = document.getElementById('btn-commit');
+        btn.disabled = true; btn.textContent = 'กำลังนำเข้า...';
+        App.call('commitPayrollImport', {
+          sheets: state.sheets, sheetIndex: state.sheetIndex, fileName: state.fileName, month: state.month, paidDate: paidDate,
+          assignments: state.assignments, replace: !!(replaceBox && replaceBox.checked),
+          newEmployeeStatus: document.getElementById('imp-newstatus').value
+        }).then(renderDone).catch(function (err) {
+          btn.disabled = false; btn.textContent = 'นำเข้า ' + pv.lines.length + ' รายการ';
+          App.toast(err.message, 'error');
+        });
+      });
+    }
+
+    function renderDone(res) {
+      body().innerHTML =
+        '<div class="card p-6 border-l-4 border-green-600">' +
+          '<div class="text-lg font-bold text-green-700">✓ นำเข้าข้อมูล ' + App.esc(res.monthLabel) + ' เรียบร้อย</div>' +
+          '<div class="text-sm text-gray-600 mt-1">' + res.imported + ' คน ยอดสุทธิรวม ' + App.money(res.totalNet) + ' บาท' + (res.skipped ? ' · ข้าม ' + res.skipped + ' แถว' : '') + '</div>' +
+          '<div class="flex gap-2 mt-4 flex-wrap">' +
+            '<a class="btn btn-primary" href="#/admin/payroll?month=' + res.month + '">ดูรอบจ่าย</a>' +
+            '<a class="btn btn-secondary" href="#/admin/reports?month=' + res.month + '">ออกเอกสารเบิกจ่าย</a>' +
+            '<button id="btn-more" class="btn btn-secondary">นำเข้าไฟล์อื่น</button>' +
+          '</div>' +
+        '</div>' +
+        (res.created.length
+          ? '<div class="card p-5 mt-4"><h2 class="font-semibold">ลูกจ้างที่สร้างใหม่ ' + res.created.length + ' คน</h2>' +
+            '<p class="text-sm text-gray-500 mb-3">รหัสชั่วคราวแสดงครั้งเดียว — แจ้งเจ้าของบัญชีเป็นรายบุคคล ระบบจะบังคับตั้ง PIN ใหม่เมื่อเข้าใช้ครั้งแรก กรุณาตรวจสอบ/เติมข้อมูลในทะเบียนลูกจ้าง (กลุ่มงาน เลขบัตรประชาชน ฯลฯ)</p>' +
+            '<table class="table-clean w-full"><thead><tr><th>รหัสพนักงาน</th><th>ชื่อ</th><th>รหัสชั่วคราว</th></tr></thead><tbody>' +
+            res.created.map(function (c) {
+              return '<tr><td class="font-mono">' + App.esc(c.employeeId) + '</td><td>' + App.esc(c.name) + '</td><td class="font-mono font-bold tracking-widest">' + App.esc(c.pin) + '</td></tr>';
+            }).join('') + '</tbody></table></div>'
+          : '');
+      document.getElementById('btn-more').onclick = renderPick;
+    }
+  };
+</script>

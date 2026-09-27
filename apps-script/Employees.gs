@@ -36,7 +36,8 @@ function sanitizeEmployee_(e) {
     note: e.Note,
     mustChangePin: needsPinChange_(e),
     pdpaAcceptedAt: e.PdpaAcceptedAt || '',
-    lastLoginAt: e.LastLoginAt || ''
+    lastLoginAt: e.LastLoginAt || '',
+    employmentType: e.EmploymentType || ''
   };
 }
 
@@ -107,6 +108,7 @@ function addEmployee(token, form) {
         PinSalt: salt,
         MustChangePin: true,
         Note: form.note || '',
+        EmploymentType: form.employmentType || '',
         CreatedAt: nowIso()
       });
 
@@ -152,7 +154,8 @@ function updateEmployee(token, employeeId, form) {
         BankAccountNo: cleanDigits_(form.bankAccountNo),
         CitizenID: cleanDigits_(form.citizenID),
         Phone: cleanDigits_(form.phone),
-        Note: form.note || ''
+        Note: form.note || '',
+        EmploymentType: form.employmentType || ''
       };
       var changed = Object.keys(patch).filter(function (k) { return String(emp[k] === undefined ? '' : emp[k]) !== String(patch[k]); });
       updateRowByIndex_(SHEET_NAMES.EMPLOYEES, emp._row, patch);
